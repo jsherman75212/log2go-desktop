@@ -1,0 +1,39 @@
+{
+  "name": "log2go-desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Log2Go Desktop - NetLogger-style amateur radio logging client",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev:vite": "vite --host 127.0.0.1 --port 5173",
+    "dev:electron": "wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "dev": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron\"",
+    "build:renderer": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build": "npm run typecheck && npm run build:renderer && npm run build:electron",
+    "preview:web": "node scripts/preview-with-proxy.mjs --host 0.0.0.0 --port 54337",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "better-sqlite3": "^13.0.1",
+    "concurrently": "latest",
+    "cross-env": "latest",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tsx": "^4.22.4",
+    "typescript": "~5.9.2",
+    "vite": "latest",
+    "wait-on": "latest"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "electron": "latest",
+    "electron-builder": "latest"
+  }
+}
