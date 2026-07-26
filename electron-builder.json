@@ -1,0 +1,34 @@
+{
+  "appId": "net.ke5zqv.log2go",
+  "productName": "Log2Go Desktop",
+  "directories": {
+    "output": "dist/installers"
+  },
+  "files": [
+    "dist-electron/**/*",
+    "dist-renderer/**/*",
+    "node_modules/**/*",
+    "package.json"
+  ],
+  "win": {
+    "target": [
+      { "target": "nsis", "arch": ["x64"] }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
+  },
+  "linux": {
+    "target": [
+      { "target": "AppImage", "arch": ["x64"] }
+    ],
+    "category": "HamRadio",
+    "maintainer": "support@ke5zqv.net",
+    "description": "Log2Go Desktop — Amateur radio logging with offline mode"
+  },
+  "npmRebuild": false,
+  "nodeGypRebuild": false
+}

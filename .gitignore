@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-renderer/
+dist-electron/
+Log2Go-Desktop-linux-x64/
+Log2Go-Desktop-win-x64/
+*.exe
+*.dll
+*.so
+*.pak
+*.bin
+*.dat
+*.asar
+build-artifacts/
