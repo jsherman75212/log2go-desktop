@@ -90,6 +90,24 @@ export async function getAccountProfile(baseUrl: string, token: string): Promise
   });
 }
 
+export async function updateAccountPassword(
+  baseUrl: string,
+  token: string,
+  username: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<AccountProfile> {
+  return requestJson<AccountProfile>(baseUrl, '/api/v1/account', {
+    method: 'PUT',
+    token,
+    body: JSON.stringify({
+      username,
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+}
+
 export async function getStationProfiles(
   baseUrl: string,
   token: string,
@@ -138,14 +156,29 @@ export async function syncContacts(
   });
 }
 
+export type ContactsResponse = {
+  contacts: BackendContactResponse[];
+  total: number;
+};
+
 export async function listContacts(
   baseUrl: string,
   token: string,
+  limit?: number,
+  offset?: number,
 ): Promise<BackendContactResponse[]> {
-  return requestJson<BackendContactResponse[]>(baseUrl, '/api/v1/contacts', {
+  let path = '/api/v1/contacts';
+  const params: string[] = [];
+  if (limit !== undefined) params.push(`limit=${limit}`);
+  if (offset !== undefined) params.push(`offset=${offset}`);
+  if (params.length > 0) path += '?' + params.join('&');
+  const data = await requestJson<ContactsResponse | BackendContactResponse[]>(baseUrl, path, {
     method: 'GET',
     token,
   });
+  // Support new {contacts, total} shape and legacy plain-array shape
+  if (Array.isArray(data)) return data;
+  return (data as ContactsResponse).contacts ?? [];
 }
 
 export async function listContactsByNet(
@@ -154,10 +187,12 @@ export async function listContactsByNet(
   netName: string,
 ): Promise<BackendContactResponse[]> {
   const params = `?net=${encodeURIComponent(netName)}`;
-  return requestJson<BackendContactResponse[]>(baseUrl, `/api/v1/contacts${params}`, {
+  const data = await requestJson<ContactsResponse | BackendContactResponse[]>(baseUrl, `/api/v1/contacts${params}`, {
     method: 'GET',
     token,
   });
+  if (Array.isArray(data)) return data;
+  return (data as ContactsResponse).contacts ?? [];
 }
 
 export async function exportAdif(baseUrl: string, token: string): Promise<string> {
@@ -193,6 +228,30 @@ export async function deleteContact(
   });
 }
 
+export type DXSpot = {
+  spotter: string;
+  freq: number;
+  dx_call: string;
+  mode: string;
+  band: string;
+  snr: string;
+  wpm: string;
+  comment: string;
+  time: string;
+  source: string;
+};
+
+export async function getDXSpots(
+  baseUrl: string,
+  token: string,
+  limit: number = 20,
+): Promise<DXSpot[]> {
+  return requestJson<DXSpot[]>(baseUrl, `/api/v1/dx-spots?limit=${limit}`, {
+    method: 'GET',
+    token,
+  });
+}
+
 export type ServiceSyncReport = {
   summary: string;
   total_uploaded: number;
@@ -207,6 +266,37 @@ export async function uploadToServices(
   token: string,
 ): Promise<ServiceSyncReport> {
   return requestJson<ServiceSyncReport>(baseUrl, '/api/v1/sync-services', {
+    method: 'POST',
+    token,
+  });
+}
+
+export type ServiceImportResult = {
+  results: { service: string; imported: number; skipped: number; warning: string | null }[];
+  total_imported: number;
+  errors: string[];
+};
+
+export async function importFromServices(
+  baseUrl: string,
+  token: string,
+): Promise<ServiceImportResult> {
+  return requestJson<ServiceImportResult>(baseUrl, '/api/v1/import-services', {
+    method: 'POST',
+    token,
+  });
+}
+
+export type DedupResult = {
+  merged: number;
+  details: Array<{ kept: number; deleted: number; call: string; qso_date: string; time_on: string; band: string }>;
+};
+
+export async function dedupContacts(
+  baseUrl: string,
+  token: string,
+): Promise<DedupResult> {
+  return requestJson<DedupResult>(baseUrl, '/api/v1/contacts/dedup', {
     method: 'POST',
     token,
   });
