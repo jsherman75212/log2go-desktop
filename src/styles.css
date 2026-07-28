@@ -22,12 +22,21 @@ input, textarea { width: 100%; border: 1px solid #2f536b; border-radius: 9px; ba
 textarea { min-height: 62px; resize: vertical; }
 label { display: grid; gap: 4px; font-size: 12px; color: #9db9cc; }
 
-.app-shell { display: grid; grid-template-rows: auto auto 1fr auto; height: 100vh; max-height: 100vh; padding: 14px; gap: 12px; background: rgba(2, 8, 14, .18); backdrop-filter: saturate(118%); overflow: hidden; }
+.app-shell { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; max-height: 100vh; padding: 14px; gap: 12px; background: rgba(2, 8, 14, .18); backdrop-filter: saturate(118%); overflow: hidden; }
 .top-bar, .bottom-bar, .tab-bar, .panel {
   border: 1px solid rgba(0, 180, 255, .34);
   background: linear-gradient(180deg, rgba(16, 35, 52, .86), rgba(7, 17, 25, .88));
   box-shadow: 0 12px 28px rgba(0,0,0,.34), inset 0 1px 0 rgba(159, 231, 255, .08);
   backdrop-filter: blur(3px);
+}
+
+.top-bar-unified .tab-bar {
+  border: none;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 0;
+  gap: 4px;
 }
 .top-bar { display: flex; align-items: center; padding: 14px 18px; border-radius: 18px; gap: 16px; position: relative; justify-content: space-between; }
 /* ── Matrix Clock ───────────────────────────────────────────────────── */
@@ -234,6 +243,9 @@ h2 { font-size: 18px; margin-bottom: 8px; }
 .logged-in-card span { color: #9db9cc; font-size: 12px; }
 .logged-in-card b { color: #fff; font-size: 22px; }
 .danger { background: linear-gradient(180deg, #ff5f68, #a92334); color: #fff; font-weight: 900; }
+.logged-in-actions { display: flex; gap: 8px; }
+.logged-in-actions button { flex: 1; font-size: 12px; padding: 8px 12px; }
+.change-password-btn { background: linear-gradient(180deg, #00b4ff, #006da3); color: #fff; font-weight: 700; }
 .account-storage-warning { color: #d7b36f; font-size: 12px; margin-bottom: 0; }
 .service-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .auto-refresh-hint { color: #7fa1b8; font-size: 11px; margin: 0 0 8px; font-style: italic; }
@@ -270,6 +282,61 @@ h2 { font-size: 18px; margin-bottom: 8px; }
 .profile-name-line { display: flex; align-items: center; gap: 8px; color: #fff; white-space: nowrap; }
 .profile-name-line b { font-size: 15px; }
 .profile-name-line span:not(.profile-check) { color: #9fe7ff; font-size: 13px; font-weight: 800; }
+
+/* Profile warning banner — flashing alert for incomplete profiles */
+@keyframes profile-warning-pulse {
+  0%, 100% { background-color: #3d1a1a; border-color: #ff6b6b; box-shadow: 0 0 8px rgba(255, 107, 107, .3); }
+  50% { background-color: #4d2020; border-color: #ff4444; box-shadow: 0 0 16px rgba(255, 68, 68, .5); }
+}
+@keyframes profile-warning-icon-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+.profile-warning-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 2px solid #ff6b6b;
+  border-radius: 10px;
+  background: #3d1a1a;
+  animation: profile-warning-pulse 2s ease-in-out infinite;
+  margin-top: 2px;
+}
+.profile-warning-icon {
+  font-size: 22px;
+  animation: profile-warning-icon-pulse 1s ease-in-out infinite;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.profile-warning-text {
+  display: grid;
+  gap: 2px;
+}
+.profile-warning-text strong {
+  color: #ffd0d0;
+  font-size: 14px;
+}
+.profile-warning-text span {
+  color: #ffaaaa;
+  font-size: 12px;
+}
+
+/* Highlighted required fields in profile edit form */
+.field-required-highlight {
+  border: 2px solid #ff6b6b !important;
+  border-radius: 8px !important;
+  padding: 4px 6px !important;
+  background: rgba(255, 107, 107, .08) !important;
+  animation: field-highlight-pulse 1.5s ease-in-out infinite;
+}
+@keyframes field-highlight-pulse {
+  0%, 100% { border-color: #ff6b6b; }
+  50% { border-color: #ff3333; }
+}
+label.field-required-highlight {
+  color: #ffaaaa !important;
+}
 .profile-qth-line { color: #9db9cc; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .profile-check { color: #70ffba; font-weight: 700; font-size: 12px; white-space: nowrap; }
 .profile-actions { display: flex; gap: 6px; flex-shrink: 0; }
@@ -552,6 +619,16 @@ h2 { font-size: 18px; margin-bottom: 8px; }
 .recent-contacts-table tbody tr:hover { background: rgba(0, 180, 255, .15); }
 .recent-contacts-table .confirmed { color: #70ffba; font-weight: 900; text-align: center; }
 .recent-contacts-table .uploaded { color: #9fe7ff; text-align: center; }
+
+/* DX Spots panel for new users */
+.dx-spots-panel { width: 100%; }
+.dx-spots-header { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #fff; padding: 6px 0; }
+.dx-spots-live-dot { width: 10px; height: 10px; background: #00ff88; border-radius: 50%; animation: pulse-dot 1.5s ease-in-out infinite; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
+.dx-spots-hint { font-weight: 400; font-size: 11px; color: rgba(255,255,255,0.5); }
+.dx-spot-row { background: rgba(0, 255, 136, 0.05) !important; }
+.dx-spot-row:nth-child(even) { background: rgba(0, 255, 136, 0.08) !important; }
+.dx-spot-row:hover { background: rgba(0, 255, 136, 0.15) !important; }
 .rc-net-cell { color: #9db9cc; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rc-actions-cell { display: flex; gap: 4px; white-space: nowrap; }
 .rc-actions-cell .small-button { padding: 2px 6px; font-size: 11px; }
@@ -766,14 +843,1018 @@ h2 { font-size: 18px; margin-bottom: 8px; }
 .auth-gate-skip-btn { margin-top: 12px; background: transparent; border: 1px solid #24485f; color: #9db9cc; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; width: 100%; }
 .auth-gate-skip-btn:hover { border-color: #00b4ff; color: #e8f6ff; }
 
-/* ── Offline Status Bar ───────────────────────────────────────────── */
-.offline-status-bar { display: flex; align-items: center; gap: 12px; padding: 6px 16px; font-size: 13px; font-weight: 600; }
-.offline-status-bar.online { background: rgba(0, 180, 255, 0.08); border-bottom: 2px solid #00b4ff; color: #9fe7ff; }
-.offline-status-bar.offline { background: rgba(255, 170, 0, 0.12); border-bottom: 2px solid #ffaa00; color: #ffcc66; }
-.offline-status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.offline-status-dot.online { background: #00ff88; box-shadow: 0 0 6px #00ff88; }
-.offline-status-dot.offline { background: #ffaa00; box-shadow: 0 0 6px #ffaa00; }
-.sync-now-btn { margin-left: auto; padding: 4px 12px; font-size: 12px; font-weight: 700; background: #00b4ff; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
-.sync-now-btn:disabled { background: #333; cursor: wait; }
-.sync-now-btn:hover:not(:disabled) { background: #0099dd; }
+/* ── Unified Top Bar (all pages) ── */
+.top-bar-unified {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0;
+  padding: 0 12px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(16, 35, 52, .86), rgba(7, 17, 25, .88));
+  border: 1px solid rgba(0, 180, 255, .34);
+  box-shadow: 0 12px 28px rgba(0,0,0,.34), inset 0 1px 0 rgba(159, 231, 255, .08);
+  backdrop-filter: blur(3px);
+  height: 48px;
+}
+.top-bar-unified > .tab-bar { flex-shrink: 0; }
+.tb-center-group {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.tb-divider-ext {
+  position: absolute;
+  left: calc(50% - 0.5px);
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: rgba(0, 180, 255, .3);
+}
+.tb-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.tb-page-label { font-size: 18px; font-weight: 700; color: #00b4ff; letter-spacing: 1px; }
+.tb-callsign {
+  background: #00b4ff;
+  color: #001019;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 13px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  white-space: nowrap;
+}
+.tb-login-btn {
+  background: #ff5252;
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.tb-login-btn:hover { opacity: 0.85; }
+.tb-logo { font-size: 18px; font-weight: 700; color: #00b4ff; letter-spacing: 1px; }
+.tb-clock-block { text-align: center; margin: 0 4px; }
+.tb-clock-label { font-size: 10px; color: #5a7a96; text-transform: uppercase; letter-spacing: 1px; }
+.tb-clock-time { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 18px; color: #e0ecf4; }
+.tb-clock-date { font-size: 11px; color: #8fa8c4; }
+.tb-page-label { font-size: 18px; font-weight: 700; color: #00b4ff; letter-spacing: 1px; }
 
+/* ── Dashboard Mode ── */
+.app-shell.dashboard-mode {
+  grid-template-rows: auto 1fr;
+  padding: 0;
+  gap: 0;
+  background: #0a0e17;
+}
+.app-shell.dashboard-mode > nav {
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  padding: 6px 16px;
+  background: #111827;
+}
+
+/* ── Dashboard Layout (3-column grid) ── */
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr 320px;
+  height: calc(100vh - 48px);
+  min-height: 0;
+  overflow: hidden;
+  gap: 1px;
+  background: #1e3048;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #e0ecf4;
+}
+.dashboard-sidebar {
+  background: #111827;
+  overflow-y: auto;
+  min-height: 0;
+}
+.dashboard-panel {
+  border-bottom: 1px solid #1e3048;
+  padding: 12px;
+}
+.dashboard-panel-title {
+  font-size: 11px;
+  color: #5a7a96;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dashboard-callsign { font-size: 20px; font-weight: 700; color: #00b4ff; }
+.dashboard-grid { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 14px; color: #ffd740; margin-top: 2px; }
+.dashboard-coords { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 11px; color: #8fa8c4; margin-top: 2px; }
+
+/* ── Solar Table ── */
+.solar-table { display: flex; flex-direction: column; gap: 4px; }
+.solar-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: #1a2332; border-radius: 3px; }
+.solar-label { font-size: 11px; color: #5a7a96; text-transform: uppercase; letter-spacing: 0.5px; }
+.solar-value { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 16px; font-weight: 600; color: #00b4ff; }
+.solar-footer { font-size: 9px; color: #5a7a96; text-align: center; margin-top: 6px; }
+
+/* ── Band Grid ── */
+.band-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+.band-cell { background: #1a2332; border-radius: 3px; padding: 4px 6px; text-align: center; }
+.band-cell .band-name { font-size: 13px; font-weight: 600; color: #8fa8c4; }
+.band-cell .band-cond { font-size: 11px; font-weight: 600; text-transform: uppercase; }
+
+/* ── Globe Area ── */
+.globe-area {
+  background: #0a0e17;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+.globe-controls {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.globe-btn {
+  background: rgba(17,24,39,0.85);
+  border: 1px solid #1e3048;
+  color: #8fa8c4;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  text-align: center;
+}
+.globe-btn:hover { color: #e0ecf4; border-color: #00b4ff; }
+.globe-btn.active { color: #00b4ff; border-color: #00b4ff; }
+.globe-stats {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 10;
+  background: rgba(17,24,39,0.85);
+  border: 1px solid #1e3048;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: #8fa8c4;
+  backdrop-filter: blur(8px);
+}
+.globe-stats b { color: #00b4ff; }
+
+/* ── Contacts Panel ── */
+.contacts-panel {
+  background: #111827;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.contact-row {
+  padding: 8px 12px;
+  border-bottom: 1px solid #1e3048;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.contact-row:hover { background: #1a2332; }
+.contact-row-top { display: flex; justify-content: space-between; align-items: baseline; }
+.contact-callsign { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 14px; font-weight: 600; color: #00b4ff; }
+.contact-band-mode { font-size: 11px; color: #8fa8c4; }
+.contact-row-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
+.contact-details { font-size: 11px; color: #5a7a96; }
+.contact-time { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 10px; color: #5a7a96; }
+.contact-lotw { font-size: 10px; padding: 1px 4px; border-radius: 2px; margin-left: 4px; }
+.contact-lotw.confirmed { background: rgba(0,230,118,0.15); color: #00e676; }
+.contact-lotw.uploaded { background: rgba(0,180,255,0.15); color: #00b4ff; }
+.contact-lotw.none { background: rgba(90,122,150,0.15); color: #5a7a96; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — @media breakpoints
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Tablet / Small Desktop (max-width: 768px) ─────────────────────── */
+@media (max-width: 768px) {
+  /* Dashboard: 3-col → single column */
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+  .dashboard-sidebar {
+    overflow: visible;
+  }
+  .globe-area {
+    min-height: 300px;
+  }
+  .contacts-panel {
+    overflow: visible;
+  }
+
+  /* Top bar: compact */
+  .top-bar-unified {
+    height: auto;
+    min-height: 44px;
+    padding: 6px 10px;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .top-bar-unified > .tab-bar {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+    margin-top: 2px;
+  }
+  .tb-center-group {
+    position: static;
+    transform: none;
+    flex: 1;
+    justify-content: center;
+  }
+  .tb-divider-ext { display: none; }
+  .tb-page-label { font-size: 15px; }
+  .tb-clock-time { font-size: 15px; }
+  .tb-clock-date { font-size: 10px; }
+
+  /* Net logger layout: 3-col → stacked */
+  .netlogger-layout {
+    grid-template-columns: 1fr;
+    overflow: visible;
+    height: auto;
+  }
+  .netlogger-layout.net-subscribed {
+    grid-template-columns: 1fr;
+  }
+  .netlogger-layout > * {
+    max-height: 400px;
+  }
+  .right-stack {
+    height: auto;
+    max-height: 400px;
+  }
+
+  /* General log layout: 2-col → stacked */
+  .general-log-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+
+  /* Settings grid: 2-col → 1-col */
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Settings hero: side-by-side → stacked */
+  .settings-hero {
+    flex-direction: column;
+  }
+  .settings-combined-hero {
+    grid-template-columns: 1fr;
+  }
+
+  /* Account form grid: stack */
+  .account-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .logged-in-card {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+  .logged-in-actions {
+    flex-direction: column;
+  }
+
+  /* Profile edit modal: 5-col → 2-col */
+  .profile-edit-modal .form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Auth modal: fill screen */
+  .auth-gate-modal {
+    max-width: 100%;
+    width: 100%;
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .auth-gate-overlay {
+    padding: 0;
+  }
+
+  /* Profile edit modal: fill screen */
+  .profile-edit-overlay {
+    padding: 0;
+  }
+  .profile-edit-modal {
+    width: 100%;
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+    overflow: auto;
+  }
+
+  /* Log contact modal: fill screen */
+  .log-contact-overlay {
+    padding: 0;
+  }
+  .log-contact-modal {
+    width: 100%;
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+    overflow: auto;
+  }
+
+  /* Tables: horizontal scroll */
+  .roster-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .roster-table {
+    min-width: 600px;
+  }
+  .logbook-table-panel {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .logbook-table {
+    min-width: 500px;
+  }
+
+  /* Recent contacts table: horizontal scroll */
+  .recent-contacts-table {
+    min-width: 600px;
+  }
+  .recent-contacts-pane {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Contest activity: stack */
+  .contest-activity-actions {
+    grid-template-columns: 1fr;
+  }
+  .contest-custom-row {
+    grid-template-columns: 1fr;
+  }
+
+  /* Form grids: stack */
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .rst-top-row {
+    grid-template-columns: 1fr;
+  }
+
+  /* Split panel: stack */
+  .split-panel {
+    grid-template-columns: 1fr;
+  }
+
+  /* Field groups: stack */
+  .field-groups {
+    grid-template-columns: 1fr;
+  }
+
+  /* App shell: reduce padding */
+  .app-shell {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  /* Bottom bar: stack */
+  .bottom-bar {
+    flex-direction: column;
+    text-align: center;
+    gap: 8px;
+  }
+
+  /* Net summary strip: tighter */
+  .net-summary-strip {
+    gap: 4px;
+  }
+  .net-summary-strip span {
+    font-size: 11px;
+    padding: 3px 7px;
+  }
+
+  /* Roster heading 3-col → stack */
+  .roster-heading-3col {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+  .roster-heading-left {
+    justify-self: center;
+  }
+  .roster-heading-3col .panel-heading-actions {
+    justify-self: center;
+  }
+
+  /* Roster toolbar: wrap */
+  .roster-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .roster-toolbar-assign {
+    margin-left: 0;
+  }
+
+  /* Recent contact row: stack */
+  .recent-contact-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 8px;
+    padding: 6px 8px;
+  }
+
+  /* Contest picker list: shorter */
+  .contest-picker-list {
+    max-height: 180px;
+  }
+
+  /* External service tiles: full width */
+  .external-service-tile {
+    flex: 1 1 100%;
+  }
+
+  /* QRZ key row: stack */
+  .qrz-key-row {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  .qrz-key-input-row {
+    flex-direction: column;
+  }
+
+  /* Share URL input: full width */
+  .share-url input {
+    width: 100%;
+  }
+
+  /* Modal content: full width */
+  .modal-content {
+    width: 95%;
+    max-width: 95%;
+  }
+  .modal-content .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Preferences modal: full width */
+  .prefs-modal {
+    width: 95%;
+    max-width: 95%;
+  }
+
+  /* Roster collapsed header: wrap */
+  .roster-header-collapsed {
+    flex-wrap: wrap;
+  }
+  .roster-collapsed-netname {
+    max-width: 120px;
+  }
+
+  /* Contest selected row: stack */
+  .contest-selected-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .contest-selected-row div {
+    justify-content: flex-start;
+  }
+
+  /* LoTW cert upload: stack */
+  .lotw-cert-upload-form {
+    grid-template-columns: 1fr;
+  }
+
+  /* History view: stack */
+  .history-view {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Phone (max-width: 480px) ──────────────────────────────────────── */
+@media (max-width: 480px) {
+  /* Dashboard: single column (already set at 768px) */
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+  .globe-area {
+    min-height: 220px;
+  }
+
+  /* Top bar: ultra-compact */
+  .top-bar-unified {
+    padding: 4px 8px;
+    gap: 3px;
+    min-height: 44px;
+  }
+  .top-bar-unified > .tab-bar {
+    gap: 3px;
+  }
+  .top-bar-unified .tab-bar button {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+  .tb-page-label { font-size: 13px; }
+  .tb-clock-time { font-size: 13px; }
+  .tb-clock-date { font-size: 9px; }
+  .tb-callsign { font-size: 11px; padding: 3px 8px; }
+  .tb-logo { font-size: 14px; }
+
+  /* App shell: minimal padding */
+  .app-shell {
+    padding: 4px;
+    gap: 6px;
+  }
+
+  /* Panels: tighter */
+  .panel {
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  /* Auth modal: full screen (already set at 768px) */
+  .auth-gate-modal {
+    padding: 20px 16px;
+  }
+  .auth-gate-section h2 {
+    font-size: 20px;
+  }
+
+  /* Profile edit modal: full screen */
+  .profile-edit-modal .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Net logger: stacked (already set at 768px) */
+  .netlogger-layout > * {
+    max-height: 300px;
+  }
+
+  /* Tables: horizontal scroll (already set at 768px) */
+  .roster-table {
+    min-width: 500px;
+  }
+  .roster-table th,
+  .roster-table td {
+    padding: 3px 4px;
+  }
+  .roster-density-extra-compact th,
+  .roster-density-extra-compact td {
+    padding: 2px 3px;
+  }
+
+  /* Recent contacts: compact */
+  .recent-contact-row {
+    grid-template-columns: 1fr 1fr;
+    font-size: 11px;
+    padding: 4px 6px;
+  }
+
+  /* Settings: compact */
+  .settings-hero-block {
+    padding: 8px;
+  }
+
+  /* Buttons: ensure touch targets >= 44px */
+  button, .small-button, .tb-login-btn, .tb-callsign {
+    min-height: 44px;
+  }
+  .small-button {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .tab-bar button {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .auth-gate-primary-btn {
+    padding: 16px;
+    font-size: 17px;
+  }
+  .auth-gate-secondary-btn {
+    padding: 12px 18px;
+    font-size: 15px;
+  }
+  .auth-gate-form input {
+    padding: 14px;
+    font-size: 16px;
+  }
+  .net-row-subscribe {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+  .mini-tabs button {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .comms-toggle {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .context-menu-item {
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 15px;
+  }
+  .roster-collapse-toggle {
+    min-height: 44px;
+    padding: 6px 12px;
+  }
+  .needed-next-btn {
+    min-height: 44px;
+    padding: 8px 14px;
+  }
+  .find-callsign-bar input {
+    min-height: 44px;
+  }
+  .find-callsign-bar .find-close {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .density-tabs button {
+    min-height: 44px;
+    padding: 6px 12px;
+  }
+  .auth-gate-skip-btn {
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+  .profile-edit-form button {
+    min-height: 44px;
+  }
+  .modal-actions button {
+    min-height: 44px;
+    padding: 10px 20px;
+  }
+  .log-contact-actions button {
+    min-height: 44px;
+  }
+  .primary, .danger {
+    min-height: 44px;
+  }
+
+  /* Bottom bar: compact */
+  .bottom-bar {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  /* Net summary strip: compact */
+  .net-summary-strip span {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+
+  /* Contest: compact */
+  .contest-selected-row b {
+    font-size: 15px;
+  }
+
+  /* Profile cards: compact */
+  .profile-summary-card b {
+    font-size: 18px;
+  }
+  .logged-in-card b {
+    font-size: 18px;
+  }
+
+  /* Dashboard sidebar: compact */
+  .dashboard-panel {
+    padding: 8px;
+  }
+  .dashboard-callsign {
+    font-size: 17px;
+  }
+  .solar-value {
+    font-size: 14px;
+  }
+
+  /* Contact rows: compact */
+  .contact-row {
+    padding: 6px 10px;
+  }
+  .contact-callsign {
+    font-size: 13px;
+  }
+
+  /* Globe controls: compact */
+  .globe-controls {
+    top: 4px;
+    right: 6px;
+    gap: 4px;
+  }
+  .globe-btn {
+    font-size: 10px;
+    padding: 3px 8px;
+  }
+  .globe-stats {
+    bottom: 6px;
+    left: 6px;
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+
+  /* Roster header collapsed: compact */
+  .roster-header-collapsed {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+  .roster-collapsed-netname {
+    font-size: 12px;
+    max-width: 100px;
+  }
+
+  /* Share URL: full width */
+  .share-url input {
+    width: 100%;
+    font-size: 10px;
+  }
+
+  /* External service tiles: full width */
+  .external-service-tile {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  /* LoTW cert upload: stack */
+  .lotw-cert-upload-form {
+    grid-template-columns: 1fr;
+  }
+
+  /* History view: stack */
+  .history-view {
+    grid-template-columns: 1fr;
+  }
+
+  /* Recent contacts table: scroll */
+  .recent-contacts-table {
+    min-width: 500px;
+  }
+
+  /* Logbook table: scroll */
+  .logbook-table {
+    min-width: 400px;
+  }
+
+  /* Logbook stats: wrap */
+  .logbook-stats {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Logbook actions: wrap */
+  .logbook-actions {
+    flex-wrap: wrap;
+  }
+
+  /* Net header actions: wrap */
+  .net-header-actions {
+    flex-wrap: wrap;
+  }
+
+  /* Roster heading: stack */
+  .roster-heading-3col {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  /* Roster toolbar: stack */
+  .roster-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Comms header: stack */
+  .comms-header {
+    flex-direction: column;
+  }
+
+  /* Panel heading: stack */
+  .panel-heading {
+    flex-direction: column;
+  }
+
+  /* Settings hero: stack */
+  .settings-hero {
+    flex-direction: column;
+  }
+
+  /* Account form: stack */
+  .account-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Logged in card: stack */
+  .logged-in-card {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  /* Profile row: stack */
+  .profile-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Profile name line: wrap */
+  .profile-name-line {
+    flex-wrap: wrap;
+  }
+
+  /* Contest custom row: stack */
+  .contest-custom-row {
+    grid-template-columns: 1fr;
+  }
+
+  /* Contest activity actions: stack */
+  .contest-activity-actions {
+    grid-template-columns: 1fr;
+  }
+
+  /* Form grid: stack */
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* RST top row: stack */
+  .rst-top-row {
+    grid-template-columns: 1fr;
+  }
+
+  /* Split panel: stack */
+  .split-panel {
+    grid-template-columns: 1fr;
+  }
+
+  /* Field groups: stack */
+  .field-groups {
+    grid-template-columns: 1fr;
+  }
+
+  /* Settings combined hero: stack */
+  .settings-combined-hero {
+    grid-template-columns: 1fr;
+  }
+
+  /* Settings grid: 1-col */
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* General log layout: stack */
+  .general-log-layout {
+    grid-template-columns: 1fr;
+  }
+
+  /* Net logger layout: stack */
+  .netlogger-layout {
+    grid-template-columns: 1fr;
+  }
+  .netlogger-layout.net-subscribed {
+    grid-template-columns: 1fr;
+  }
+
+  /* Right stack: single */
+  .right-stack {
+    grid-template-rows: auto;
+  }
+
+  /* Bottom bar: stack */
+  .bottom-bar {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  /* Net summary strip: compact */
+  .net-summary-strip {
+    gap: 3px;
+  }
+
+  /* Contest picker list: compact */
+  .contest-picker-list {
+    max-height: 150px;
+  }
+
+  /* QRZ key row: stack */
+  .qrz-key-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .qrz-key-input-row {
+    flex-direction: column;
+  }
+
+  /* External service tiles: full width */
+  .external-service-tiles {
+    flex-direction: column;
+  }
+
+  /* Modal content: full width */
+  .modal-content {
+    width: 98%;
+    max-width: 98%;
+    padding: 14px;
+  }
+  .modal-content .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Preferences modal: full width */
+  .prefs-modal {
+    width: 98%;
+    max-width: 98%;
+    padding: 14px;
+  }
+
+  /* Roster collapsed header: compact */
+  .roster-header-collapsed {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  /* Contest selected row: stack */
+  .contest-selected-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .contest-selected-row div {
+    justify-content: flex-start;
+  }
+
+  /* Net row: compact */
+  .net-row {
+    flex-direction: column;
+  }
+  .net-row-subscribe {
+    align-self: stretch;
+    margin: 0 8px 8px;
+  }
+
+  /* Roster user banner: compact */
+  .roster-user-callsign {
+    font-size: 18px;
+  }
+  .roster-user-netname {
+    font-size: 12px;
+  }
+
+  /* AIM send box: compact */
+  .aim-send-box {
+    padding: 8px;
+  }
+
+  /* Comms scroll: compact */
+  .comms-scroll {
+    max-height: 200px;
+  }
+
+  /* History sidebar: compact */
+  .history-sidebar .history-net-summary {
+    padding: 8px;
+  }
+}
+
+/* ── Touch-friendly overrides (any pointer-coarse device) ──────────── */
+@media (pointer: coarse) {
+  button, .small-button, .tab-bar button, .mini-tabs button,
+  .comms-toggle, .context-menu-item, .roster-collapse-toggle,
+  .needed-next-btn, .density-tabs button, .auth-gate-skip-btn,
+  .auth-gate-primary-btn, .auth-gate-secondary-btn,
+  .net-row-subscribe, .find-callsign-bar input,
+  .find-callsign-bar .find-close, .modal-actions button,
+  .log-contact-actions button, .primary, .danger,
+  .profile-edit-form button, .tb-login-btn {
+    min-height: 44px;
+  }
+}

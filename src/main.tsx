@@ -71,6 +71,7 @@ import {
   updateContact as backendUpdateContact,
   deleteContact as backendDeleteContact,
   uploadToServices,
+  updateAccountPassword,
   type ServiceSyncReport,
   checkLotwCertificate,
   uploadLotwCertificate,
@@ -118,8 +119,9 @@ import { ContextMenu, buildRosterMenu, buildMonitorMenu, type MenuItem, type Ros
 import { usePreferences, PreferencesModal, DEFAULT_PREFERENCES, type Log2GoPreferences } from './components/Preferences';
 import { useKeyboardShortcuts, useStationHighlighter, parseSlashCodes, type HighlighterMode } from './components/NetLoggerShortcuts';
 import { renderAimText, getAimMessageClass } from './components/AimMessageRenderer';
+import { DashboardTab } from './dashboard';
 
-type AppTab = 'netlogger' | 'general' | 'contest' | 'logbook' | 'settings';
+type AppTab = 'dashboard' | 'netlogger' | 'general' | 'contest' | 'logbook' | 'settings';
 
 const desktopPersistenceStores = createDesktopPersistenceStores();
 const APP_TAB_KEY = 'log2go.web.activeTab.v1';
@@ -237,11 +239,11 @@ function isReloadNavigation(): boolean {
 }
 
 function readInitialTab(): AppTab {
-  if (!isReloadNavigation() || typeof localStorage === 'undefined') return 'settings';
+  if (!isReloadNavigation() || typeof localStorage === 'undefined') return 'dashboard';
   const stored = localStorage.getItem(APP_TAB_KEY);
-  return stored === 'netlogger' || stored === 'general' || stored === 'contest' || stored === 'logbook' || stored === 'settings'
+  return stored === 'dashboard' || stored === 'netlogger' || stored === 'general' || stored === 'contest' || stored === 'logbook' || stored === 'settings'
     ? stored
-    : 'settings';
+    : 'dashboard';
 }
 
 function browserSessionId(): string {
@@ -255,6 +257,26 @@ function browserSessionId(): string {
 
 function hasConfiguredStationProfile(collection: StationProfileCollection): boolean {
   return collection.profiles.some((profile) => profile.callsign.trim() || profile.profileName.trim() || profile.homeGrid?.trim());
+}
+
+/** Check whether a station profile has the minimum fields required for logging. */
+function isProfileCompleteForLogging(profile: StationProfile | undefined): boolean {
+  if (!profile) return false;
+  const hasCallsign = (profile.callsign?.trim().length ?? 0) > 0;
+  const hasLocation = (profile.homeGrid?.trim().length ?? 0) > 0 || (profile.state?.trim().length ?? 0) > 0 || (profile.county?.trim().length ?? 0) > 0;
+  const hasAutoGps = profile.autoGps ?? false;
+  return hasCallsign && (hasLocation || hasAutoGps);
+}
+
+/** Return a descriptive list of missing required fields for a profile. */
+function getMissingProfileFields(profile: StationProfile | undefined): string[] {
+  if (!profile) return ['Station profile'];
+  const missing: string[] = [];
+  if (!(profile.callsign?.trim().length ?? 0)) missing.push('Callsign');
+  const hasLocation = (profile.homeGrid?.trim().length ?? 0) > 0 || (profile.state?.trim().length ?? 0) > 0 || (profile.county?.trim().length ?? 0) > 0;
+  const hasAutoGps = profile.autoGps ?? false;
+  if (!hasLocation && !hasAutoGps) missing.push('Location (Grid, State/County, or enable Auto GPS)');
+  return missing;
 }
 
 function applyStationProfileCollection(
@@ -344,8 +366,29 @@ function EditableCell({ canEdit, rowKey, field, value, serialNo, className, onEd
   );
 }
 
+
+
+
 function App() {
-  const [tab, setTab] = useState<AppTab>(() => readInitialTab());
+    const [utcTime, setUtcTime] = useState('--:--:--');
+  const [utcDate, setUtcDate] = useState('----');
+  const [localTime, setLocalTime] = useState('--:--:--');
+  const [localDate, setLocalDate] = useState('----');
+const [tab, setTab] = useState<AppTab>(() => readInitialTab());
+
+  // ── Clock tick ──
+  useEffect(() => {
+    function tick() {
+      const now = new Date();
+      setUtcTime(now.toISOString().slice(11, 19));
+      setUtcDate(now.toISOString().slice(0, 10));
+      setLocalTime(now.toLocaleTimeString('en-US', { hour12: false }));
+      setLocalDate(now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }));
+    }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
   const [loggingState, setLoggingState] = useState<LoggingFlowState>(() => createInitialLoggingFlowState());
   const [persistenceReady, setPersistenceReady] = useState(false);
   const [activeNets, setActiveNets] = useState<FlatActiveNet[]>([]);
@@ -422,7 +465,6 @@ function App() {
   const [aimIgnoredCallsigns, setAimIgnoredCallsigns] = useState<Set<string>>(new Set());
   const rosterTableRef = useRef<HTMLTableElement>(null);
   const [rosterHeaderCollapsed, setRosterHeaderCollapsed] = useState(false);
-
   const [contestOptions, setContestOptions] = useState<ContestCalendarEvent[]>([]);
   const [contestOptionsLoading, setContestOptionsLoading] = useState(false);
   // ── Create Net modal state ──────────────────────────────────────────
@@ -665,12 +707,6 @@ function App() {
     };
   }, []);
 
-  // ── Offline status (desktop-only feature) ──────────────────────────
-  const offlineStatus = useOfflineStatus(
-    loggingState.backendBaseUrl,
-    loggingState.accessToken ?? '',
-  );
-
   // ── Auth gate: show modal when persistence is ready and no valid token ─
   useEffect(() => {
     if (!persistenceReady) return;
@@ -678,6 +714,12 @@ function App() {
       setAuthGateVisible(true);
     }
   }, [persistenceReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Offline status (desktop-only feature) ──────────────────────────
+  const offlineStatus = useOfflineStatus(
+    loggingState.backendBaseUrl,
+    loggingState.accessToken ?? '',
+  );
 
   // ── Fetch all backend contacts for the recent contacts panel ──────
   useEffect(() => {
@@ -687,8 +729,11 @@ function App() {
     }
     let cancelled = false;
     listContacts(loggingState.backendBaseUrl, loggingState.accessToken)
-      .then((contacts) => { if (!cancelled) setAllBackendContacts(contacts); })
-      .catch(() => { if (!cancelled) setAllBackendContacts([]); });
+      .then((contacts) => {
+        if (cancelled) return;
+        setAllBackendContacts(contacts);
+      })
+      .catch(() => { if (!cancelled) { setAllBackendContacts([]); } });
     return () => { cancelled = true; };
   }, [loggingState.accessToken, loggingState.backendBaseUrl]);
 
@@ -2632,57 +2677,76 @@ function App() {
   }, [aimJoined, monitoringRosterOnly, leaveNet, selectedNet, tab]);
 
   return (
-    <main className="app-shell">
-      <header className="top-bar">
-        <div>
-          <div className="eyebrow">KE5ZQV Log2Go Desktop</div>
-          <h1>Log2Go Desktop</h1>
-          <p className="header-subtitle">Browser-based NetLogger-style operating console with Log2Go account logging.</p>
+    <main className={`app-shell${tab === "dashboard" ? " dashboard-mode" : ""}`}>
+
+
+      <div className="top-bar-unified">
+        <nav className="tab-bar" aria-label="Log2Go desktop sections">
+          {([
+            ['dashboard', 'Dashboard'],
+            ['netlogger', 'Nets'],
+            ['general', 'Logging'],
+            ['contest', 'Contest'],
+            ['logbook', 'Logbook'],
+            ['settings', 'Settings'],
+          ] as const).map(([id, label]) => (
+            <button key={id} className={tab === id ? 'active' : ''} title={label} aria-label={label} onClick={() => {
+              const activityTabs = ['netlogger', 'general', 'contest'];
+              if (activityTabs.includes(id)) {
+                const profiles = loggingState.profileCollection.profiles;
+                if (profiles.length === 0) {
+                  setNetsStatus('Create a station profile before logging contacts. Go to Settings to create one.');
+                  setTab('settings');
+                  return;
+                }
+                const active = loggingState.stationProfile;
+                const hasCallsign = (active.callsign?.trim().length ?? 0) > 0;
+                const hasLocation = (active.homeGrid?.trim().length ?? 0) > 0 || (active.state?.trim().length ?? 0) > 0 || (active.county?.trim().length ?? 0) > 0;
+                const hasAutoGps = active.autoGps ?? false;
+                if (!hasCallsign || (!hasLocation && !hasAutoGps)) {
+                  setNetsStatus('Select a station profile with location info before logging contacts. Go to Settings to select or create one.');
+                  setTab('settings');
+                  return;
+                }
+              }
+              setTab(id as AppTab);
+            }}>
+              {label}
+            </button>
+          ))}
+        </nav>
+        <div className="tb-center-group">
+          <span className="tb-logo">LOG2GO</span>
+          <div className="tb-clock-block">
+            <div className="tb-clock-label">UTC</div>
+            <div className="tb-clock-time">{utcTime}</div>
+            <div className="tb-clock-date">{utcDate}</div>
+          </div>
+          <div className="tb-clock-block">
+            <div className="tb-clock-label">LOCAL</div>
+            <div className="tb-clock-time">{localTime}</div>
+            <div className="tb-clock-date">{localDate}</div>
+          </div>
+          <span className="tb-page-label">{tab === 'dashboard' ? 'DASHBOARD' : tab === 'netlogger' ? 'NETS' : tab === 'general' ? 'LOGGING' : tab === 'contest' ? 'CONTEST' : tab === 'logbook' ? 'LOGBOOK' : 'SETTINGS'}</span>
         </div>
-        <MatrixClock />
-        <div className="status-pill">{busy ? 'Working...' : 'Idle'}</div>
-      </header>
+        <div className="tb-divider-ext" />
+        <div className="tb-right">
+          {loggingState.accessToken ? (
+            <span className="tb-callsign">{loggingState.stationProfile?.callsign?.trim() || 'LOG2GO'}</span>
+          ) : (
+            <button className="tb-login-btn" onClick={() => setAuthGateVisible(true)}>LOG IN</button>
+          )}
+        </div>
+      </div>
 
       {/* ── Offline Status Bar ─────────────────────────────────────── */}
       {offlineStatus.isDesktop && (
         <OfflineStatusBar status={offlineStatus} />
       )}
 
-      <nav className="tab-bar" aria-label="Log2Go desktop sections">
-        {([
-          ['netlogger', 'Nets'],
-          ['general', 'Logging'],
-          ['contest', 'Contest'],
-          ['logbook', 'Logbook'],
-          ['settings', 'Settings'],
-        ] as const).map(([id, label]) => (
-          <button key={id} className={tab === id ? 'active' : ''} title={label} aria-label={label} onClick={() => {
-            const activityTabs = ['netlogger', 'general', 'contest'];
-            if (activityTabs.includes(id)) {
-              const profiles = loggingState.profileCollection.profiles;
-              if (profiles.length === 0) {
-                setNetsStatus('Create a station profile before logging contacts. Go to Settings to create one.');
-                setTab('settings');
-                return;
-              }
-              const active = loggingState.stationProfile;
-              const hasCallsign = (active.callsign?.trim().length ?? 0) > 0;
-              const hasLocation = (active.homeGrid?.trim().length ?? 0) > 0 || (active.state?.trim().length ?? 0) > 0 || (active.county?.trim().length ?? 0) > 0;
-              const hasAutoGps = active.autoGps ?? false;
-              if (!hasCallsign || (!hasLocation && !hasAutoGps)) {
-                setNetsStatus('Select a station profile with location info before logging contacts. Go to Settings to select or create one.');
-                setTab('settings');
-                return;
-              }
-            }
-            setTab(id as AppTab);
-          }}>
-            {label}
-          </button>
-        ))}
-      </nav>
-
-      {tab === 'netlogger' ? (
+      {tab === 'dashboard' ? (
+        <DashboardTab accessToken={loggingState.accessToken} backendBaseUrl={loggingState.backendBaseUrl} />
+      ) : tab === 'netlogger' ? (
         <>
         {viewingHistory ? (
           <section className="netlogger-layout history-view">
@@ -3349,7 +3413,7 @@ function App() {
                     <table className="roster-table recent-contacts-table">
                       <thead>
                         <tr>
-                          <th className="sortable" onClick={() => toggleRecentSort('call')}>Call {recentSort.key === 'call' ? (recentSort.dir === 'asc' ? '▲' : '▼') : ''}</th>
+                          <th className="sortable" onClick={() => toggleRecentSort('call')}>Call {recentSort.key === 'call' ? (recentSort.dir === 'asc' ? '▲' : '▼') : ''}</th>,
                           <th className="sortable" onClick={() => toggleRecentSort('qso_date')}>Date {recentSort.key === 'qso_date' ? (recentSort.dir === 'asc' ? '▲' : '▼') : ''}</th>
                           <th>Time</th>
                           <th className="sortable" onClick={() => toggleRecentSort('mode')}>Mode {recentSort.key === 'mode' ? (recentSort.dir === 'asc' ? '▲' : '▼') : ''}</th>
@@ -3806,10 +3870,12 @@ function App() {
         </div>
       )}
 
+      {tab !== 'dashboard' && (
       <footer className="bottom-bar">
         <span>{netsStatus}</span>
         <span>{loggingState.contacts.length} local contact(s) this session</span>
       </footer>
+      )}
 
       {authGateVisible && (
         <AuthGate
@@ -4196,6 +4262,10 @@ function StationProfilesSection({
   onUpdate,
   onDelete,
   embedded = false,
+  profileIncomplete = false,
+  missingFields = [],
+  accessToken,
+  backendBaseUrl,
 }: {
   profiles: StationProfile[];
   activeProfileId?: string;
@@ -4204,9 +4274,21 @@ function StationProfilesSection({
   onUpdate: (profileId: string, input: UpdateProfileInput) => void;
   onDelete: (profileId: string) => void;
   embedded?: boolean;
+  profileIncomplete?: boolean;
+  missingFields?: string[];
+  accessToken?: string;
+  backendBaseUrl?: string;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+
+  // Auto-expand edit form for the incomplete active profile on mount
+  useEffect(() => {
+    if (profileIncomplete && activeProfileId && !editingId && !isAdding) {
+      setEditingId(activeProfileId);
+      setIsAdding(false);
+    }
+  }, [profileIncomplete, activeProfileId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startEdit = (id: string) => {
     setEditingId(id);
@@ -4222,6 +4304,11 @@ function StationProfilesSection({
   };
   const editingProfile = profiles.find((profile) => profile.id === editingId);
 
+  // Determine which fields to highlight in the edit form
+  const highlightFields = profileIncomplete && editingId === activeProfileId
+    ? missingFields
+    : [];
+
   return (
     <section className={embedded ? 'profiles-panel profiles-panel-embedded' : 'panel profiles-panel'}>
       <div className="panel-heading">
@@ -4233,6 +4320,22 @@ function StationProfilesSection({
           <button onClick={startAdd} type="button">+ Add Profile</button>
         )}
       </div>
+
+      {profileIncomplete && (
+        <div className="profile-warning-banner" role="alert">
+          <span className="profile-warning-icon">⚠️</span>
+          <div className="profile-warning-text">
+            {profiles.length === 0 ? (
+              <strong>Create a station profile before logging contacts.</strong>
+            ) : (
+              <>
+                <strong>Your active station profile needs configuration.</strong>
+                <span>Missing required field{missingFields.length !== 1 ? 's' : ''}: {missingFields.join(', ')}</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="profile-list">
         {profiles.map((profile) => (
@@ -4268,6 +4371,9 @@ function StationProfilesSection({
                 profile={editingProfile}
                 onSave={(input) => { editingProfile ? onUpdate(editingProfile.id, input) : onAdd(input); cancel(); }}
             onCancel={cancel}
+            highlightFields={highlightFields}
+            accessToken={accessToken}
+            backendBaseUrl={backendBaseUrl}
           />
             </div>
           </div>
@@ -4281,10 +4387,16 @@ function ProfileEditForm({
   profile,
   onSave,
   onCancel,
+  highlightFields = [],
+  accessToken,
+  backendBaseUrl,
 }: {
   profile?: StationProfile;
   onSave: (input: CreateProfileInput) => void;
   onCancel: () => void;
+  highlightFields?: string[];
+  accessToken?: string;
+  backendBaseUrl?: string;
 }) {
   const [callsign, setCallsign] = useState(profile?.callsign ?? '');
   const [profileName, setProfileName] = useState(profile?.profileName ?? '');
@@ -4301,6 +4413,11 @@ function ProfileEditForm({
   const [showGpsDialog, setShowGpsDialog] = useState(false);
   const [gpsDeviceAvailable, setGpsDeviceAvailable] = useState<boolean | null>(null);
 
+  // Auto-fill states
+  const [autoFillSuggestions, setAutoFillSuggestions] = useState<Record<string, string> | null>(null);
+  const [autoFillLoading, setAutoFillLoading] = useState(false);
+  const [autoFillError, setAutoFillError] = useState('');
+
   const save = () => {
     if (!callsign.trim()) return;
     onSave({
@@ -4316,6 +4433,67 @@ function ProfileEditForm({
       rigInfo: rigInfo.trim() || undefined,
       autoGps,
     });
+  };
+
+  /**
+   * On save, check for blank fields that could be auto-filled.
+   * If grid is present but city/state/county are empty, reverse-geocode the grid.
+   * If callsign is present and we have an access token, try QRZ lookup for operator name.
+   * Present suggestions to the user before saving.
+   */
+  const handleSave = async () => {
+    if (!callsign.trim()) return;
+
+    const suggestions: Record<string, string> = {};
+    const hasEmptyFields = !state.trim() || !county.trim() || !city.trim();
+    const hasGrid = homeGrid.trim().length >= 4;
+
+    // Grid → reverse geocode for city/state/county
+    if (hasEmptyFields && hasGrid) {
+      setAutoFillLoading(true);
+      setAutoFillError('');
+      try {
+        const { gridToCoordinates: gridToCoords } = await import('./utils/maidenhead');
+        const coords = gridToCoords(homeGrid.trim());
+        if (coords) {
+          const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}&zoom=10`, {
+            headers: { 'Accept-Language': 'en' },
+          });
+          const data = await resp.json();
+          if (data.address) {
+            if (!state.trim() && data.address.state) suggestions.state = data.address.state;
+            if (!county.trim() && (data.address.county || data.address.state_district)) suggestions.county = data.address.county || data.address.state_district || '';
+            if (!city.trim() && (data.address.city || data.address.town || data.address.village || data.address.hamlet)) suggestions.city = data.address.city || data.address.town || data.address.village || data.address.hamlet || '';
+          }
+        }
+      } catch {
+        // Non-fatal — just skip auto-fill
+      }
+      setAutoFillLoading(false);
+    }
+
+    // If we have suggestions, show them; otherwise save immediately
+    if (Object.keys(suggestions).length > 0) {
+      setAutoFillSuggestions(suggestions);
+    } else {
+      save();
+    }
+  };
+
+  const acceptAutoFill = () => {
+    if (autoFillSuggestions) {
+      if (autoFillSuggestions.state) setState(autoFillSuggestions.state);
+      if (autoFillSuggestions.county) setCounty(autoFillSuggestions.county);
+      if (autoFillSuggestions.city) setCity(autoFillSuggestions.city);
+    }
+    setAutoFillSuggestions(null);
+    // State updates are batched — save after they're applied
+    setTimeout(save, 0);
+  };
+
+  const rejectAutoFill = () => {
+    setAutoFillSuggestions(null);
+    save();
   };
 
   const captureGps = () => {
@@ -4372,15 +4550,19 @@ function ProfileEditForm({
     }
   };
 
+  // Determine which individual fields need highlighting based on missingFields
+  const needsCallsign = highlightFields.some((f) => f.includes('Callsign'));
+  const needsLocation = highlightFields.some((f) => f.includes('Location'));
+
   return (
     <div className="profile-edit-form">
       <div className="form-grid">
-        <label>Callsign *<input value={callsign} onChange={(e) => setCallsign(e.target.value)} placeholder="Callsign" /></label>
+        <label className={needsCallsign ? 'field-required-highlight' : undefined}>Callsign *<input value={callsign} onChange={(e) => setCallsign(e.target.value)} placeholder="Callsign" /></label>
         <label>Profile Name<input value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="Profile name" /></label>
         <label>Operator Name<input value={operatorName} onChange={(e) => setOperatorName(e.target.value)} placeholder="Operator name" /></label>
-        <label>Grid<input value={homeGrid} onChange={(e) => setHomeGrid(e.target.value)} placeholder="Grid" /></label>
-        <label>State<input value={state} onChange={(e) => setState(e.target.value)} placeholder="State" /></label>
-        <label>County<input value={county} onChange={(e) => setCounty(e.target.value)} placeholder="County" /></label>
+        <label className={needsLocation ? 'field-required-highlight' : undefined}>Grid<input value={homeGrid} onChange={(e) => setHomeGrid(e.target.value)} placeholder="Grid" /></label>
+        <label className={needsLocation ? 'field-required-highlight' : undefined}>State<input value={state} onChange={(e) => setState(e.target.value)} placeholder="State" /></label>
+        <label className={needsLocation ? 'field-required-highlight' : undefined}>County<input value={county} onChange={(e) => setCounty(e.target.value)} placeholder="County" /></label>
         <label>City<input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" /></label>
         <label>M/P Status
           <select value={mpStatus} onChange={(e) => setMpStatus(e.target.value as MobilePortableStatus)}>
@@ -4390,18 +4572,20 @@ function ProfileEditForm({
         <label>Default Mode<input value={defaultMode} onChange={(e) => setDefaultMode(e.target.value)} placeholder="Mode" /></label>
         <label>Rig Info<input value={rigInfo} onChange={(e) => setRigInfo(e.target.value)} placeholder="Rig" /></label>
       </div>
-      <div className="profile-form-gps-section">
+      <div className={`profile-form-gps-section${needsLocation ? ' field-required-highlight' : ''}`}>
         <button type="button" className="small-button" disabled={gpsCapturing} onClick={captureGps}>
           {gpsCapturing ? 'Capturing GPS...' : 'Capture GPS Location'}
         </button>
-        <label className="auto-gps-toggle">
+        <label className={`auto-gps-toggle${needsLocation ? ' field-required-highlight' : ''}`}>
           <input type="checkbox" checked={autoGps} onChange={toggleAutoGps} />
           Auto GPS Tracking
         </label>
         <p className="auth-gate-muted">When enabled, GPS location will be automatically used to fill station location for each contact logged with this profile.</p>
       </div>
       <div className="profile-form-actions">
-        <button className="primary" onClick={save} type="button" disabled={!callsign.trim()}>Save</button>
+        <button className="primary" onClick={() => void handleSave()} type="button" disabled={!callsign.trim() || autoFillLoading}>
+          {autoFillLoading ? 'Looking up location...' : 'Save'}
+        </button>
         <button onClick={onCancel} type="button">Cancel</button>
       </div>
       {showGpsDialog && (
@@ -4417,6 +4601,23 @@ function ProfileEditForm({
               <button className="primary" onClick={() => { setShowGpsDialog(false); captureGps(); }}>Connect GPS Device</button>
               <button onClick={() => { setAutoGps(false); setShowGpsDialog(false); }}>Turn Off Auto GPS</button>
               <button onClick={() => setShowGpsDialog(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {autoFillSuggestions && (
+        <div className="modal-backdrop" onClick={() => { setAutoFillSuggestions(null); save(); }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Auto-Fill Location</h2>
+            <p className="auth-gate-muted">Your grid square maps to these location details. Fill them in automatically?</p>
+            <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0' }}>
+              {autoFillSuggestions.state && <li><b>State:</b> {autoFillSuggestions.state}</li>}
+              {autoFillSuggestions.county && <li><b>County:</b> {autoFillSuggestions.county}</li>}
+              {autoFillSuggestions.city && <li><b>City:</b> {autoFillSuggestions.city}</li>}
+            </ul>
+            <div className="modal-actions">
+              <button className="primary" onClick={acceptAutoFill}>Yes, fill them in</button>
+              <button onClick={rejectAutoFill}>No, save as-is</button>
             </div>
           </div>
         </div>
@@ -4842,6 +5043,42 @@ function SettingsTab({
   const isLoggedIn = Boolean(loggingState.accessToken);
   const loginReady = Boolean(loggingState.backendBaseUrl.trim() && loggingState.username.trim() && loggingState.password);
 
+  // Change password state
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwBusy, setPwBusy] = useState(false);
+
+  const handleChangePassword = async () => {
+    setPwError('');
+    if (!currentPw.trim()) { setPwError('Enter your current password.'); return; }
+    if (newPw.length < 8) { setPwError('New password must be at least 8 characters.'); return; }
+    if (newPw !== confirmPw) { setPwError('New passwords do not match.'); return; }
+    setPwBusy(true);
+    try {
+      await updateAccountPassword(loggingState.backendBaseUrl, loggingState.accessToken!, loggingState.username, currentPw, newPw);
+      setShowChangePassword(false);
+      setCurrentPw('');
+      setNewPw('');
+      setConfirmPw('');
+      setPwError('');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Try to extract a more helpful message from API errors
+      if (msg.includes('403') || msg.toLowerCase().includes('incorrect')) {
+        setPwError('Current password is incorrect.');
+      } else if (msg.includes('400')) {
+        setPwError('Invalid request. New password must be at least 8 characters.');
+      } else {
+        setPwError(`Failed to change password: ${msg}`);
+      }
+    } finally {
+      setPwBusy(false);
+    }
+  };
+
   return (
     <section className="settings-layout">
       <div className="panel settings-hero settings-combined-hero">
@@ -4869,7 +5106,10 @@ function SettingsTab({
               <span>Logged in as</span>
               <b>{accountProfile?.callsign || loggingState.username}</b>
               <span>{accountProfile?.email || 'Account profile will refresh after the next login.'}</span>
-              <button className="danger" onClick={onLogout} type="button">LOG OUT</button>
+              <div className="logged-in-actions">
+                <button className="danger" onClick={onLogout} type="button">LOG OUT</button>
+                <button className="change-password-btn" onClick={() => { setShowChangePassword(true); setPwError(''); }} type="button">Change Password</button>
+              </div>
             </div>
           ) : (
             <div className="account-form-grid">
@@ -4922,6 +5162,10 @@ function SettingsTab({
           onUpdate={onUpdateProfile}
           onDelete={onDeleteProfile}
           embedded
+          profileIncomplete={!isProfileCompleteForLogging(loggingState.stationProfile)}
+          missingFields={getMissingProfileFields(loggingState.stationProfile)}
+          accessToken={loggingState.accessToken}
+          backendBaseUrl={loggingState.backendBaseUrl}
         />
       </div>
 
@@ -4930,6 +5174,36 @@ function SettingsTab({
         token={loggingState.accessToken}
         isLoggedIn={isLoggedIn}
       />
+
+      {showChangePassword && (
+        <div className="modal-backdrop" onClick={() => setShowChangePassword(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Change Password</h2>
+            <p className="auth-gate-muted">Update your Log2Go account password. You'll need to enter your current password for security.</p>
+            {pwError && <div className="auth-gate-error">{pwError}</div>}
+            <div className="auth-gate-form">
+              <label>
+                Current Password
+                <input type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="Enter current password" autoComplete="current-password" />
+              </label>
+              <label>
+                New Password
+                <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="At least 8 characters" autoComplete="new-password" />
+              </label>
+              <label>
+                Confirm New Password
+                <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Re-enter new password" autoComplete="new-password" />
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button className="primary" onClick={() => void handleChangePassword()} disabled={pwBusy || !currentPw.trim() || newPw.length < 8 || newPw !== confirmPw} type="button">
+                {pwBusy ? 'Changing...' : 'Change Password'}
+              </button>
+              <button onClick={() => { setShowChangePassword(false); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwError(''); }} type="button">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </section>
   );
@@ -5153,77 +5427,15 @@ function RecentContactsPanel({ contacts }: { contacts: Contact[] }) {
   );
 }
 
-// ── Offline Status Bar Component ─────────────────────────────────────
 function OfflineStatusBar({ status }: { status: OfflineStatus }) {
-  const { isOnline, stats, syncing, lastSyncResult, syncNow } = status;
-  const hasPending = stats.unsyncedContacts > 0 || stats.pendingSync > 0;
-
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      padding: '6px 16px',
-      fontSize: '13px',
-      fontWeight: 600,
-      background: isOnline ? 'rgba(0, 180, 255, 0.08)' : 'rgba(255, 170, 0, 0.12)',
-      borderBottom: `2px solid ${isOnline ? '#00b4ff' : '#ffaa00'}`,
-      color: isOnline ? '#9fe7ff' : '#ffcc66',
-    }}>
-      {/* Online/Offline indicator */}
-      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <span style={{
-          width: '8px',
-          height: '8px',
-          borderRadius: '50%',
-          background: isOnline ? '#00ff88' : '#ffaa00',
-          boxShadow: `0 0 6px ${isOnline ? '#00ff88' : '#ffaa00'}`,
-        }} />
-        {isOnline ? 'ONLINE' : 'OFFLINE'}
-      </span>
-
-      {/* Stats */}
-      <span>
-        {stats.totalContacts} contact{stats.totalContacts !== 1 ? 's' : ''}
-        {stats.unsyncedContacts > 0 && (
-          <span style={{ color: '#ffaa00', marginLeft: '4px' }}>
-            ({stats.unsyncedContacts} unsynced)
-          </span>
-        )}
-      </span>
-
-      {stats.openNets > 0 && (
-        <span>{stats.openNets} open net{stats.openNets !== 1 ? 's' : ''}</span>
-      )}
-
-      {/* Sync button */}
-      {isOnline && hasPending && (
-        <button
-          onClick={() => void syncNow()}
-          disabled={syncing}
-          style={{
-            marginLeft: 'auto',
-            padding: '4px 12px',
-            fontSize: '12px',
-            fontWeight: 700,
-            background: syncing ? '#333' : '#00b4ff',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: syncing ? 'wait' : 'pointer',
-          }}
-        >
-          {syncing ? 'Syncing...' : `Sync Now (${stats.unsyncedContacts + stats.pendingSync})`}
-        </button>
-      )}
-
-      {/* Last sync result */}
-      {lastSyncResult && !syncing && (
-        <span style={{ fontSize: '11px', color: '#82918c' }}>
-          {lastSyncResult.succeeded > 0 && `${lastSyncResult.succeeded} synced`}
-          {lastSyncResult.failed > 0 && `, ${lastSyncResult.failed} failed`}
-        </span>
-      )}
+    <div className={`offline-status-bar ${status.isOnline ? 'online' : 'offline'}`}>
+      <span className={`offline-status-dot ${status.isOnline ? 'online' : 'offline'}`} />
+      <span>{status.isOnline ? 'Online' : 'Offline'}</span>
+      {status.stats.pendingSync > 0 && <span>{status.stats.pendingSync} pending sync</span>}
+      <button className="sync-now-btn" onClick={() => void status.syncNow()} disabled={status.syncing}>
+        {status.syncing ? 'Syncing...' : 'Sync Now'}
+      </button>
     </div>
   );
 }

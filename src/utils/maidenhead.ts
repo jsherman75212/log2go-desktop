@@ -74,6 +74,52 @@ export function calculateMaidenheadGrid(
   return `${grid}${extendedLon.index}${extendedLat.index}`;
 }
 
+/**
+ * Convert a Maidenhead grid square to approximate center coordinates.
+ * Supports 4, 6, or 8 character grids. Returns null if the grid is invalid.
+ */
+export function gridToCoordinates(grid: string): Coordinates | null {
+  const g = grid.trim().toUpperCase();
+  if (g.length < 4 || g.length % 2 !== 0) return null;
+
+  // Field (first 2 chars: letter + letter)
+  const fieldLon = FIELD_LETTERS.indexOf(g[0]);
+  const fieldLat = FIELD_LETTERS.indexOf(g[1]);
+  if (fieldLon < 0 || fieldLat < 0) return null;
+
+  // Square (next 2 chars: digit + digit)
+  const squareLon = parseInt(g[2], 10);
+  const squareLat = parseInt(g[3], 10);
+  if (isNaN(squareLon) || isNaN(squareLat) || squareLon < 0 || squareLon > 9 || squareLat < 0 || squareLat > 9) return null;
+
+  let longitude = fieldLon * 20 + squareLon * 2;
+  let latitude = fieldLat * 10 + squareLat * 1;
+
+  if (g.length >= 6) {
+    const subsquareLon = SUBSQUARE_LETTERS.indexOf(g[4]);
+    const subsquareLat = SUBSQUARE_LETTERS.indexOf(g[5]);
+    if (subsquareLon < 0 || subsquareLat < 0) return null;
+    longitude += subsquareLon * (2 / 24) + (1 / 24);
+    latitude += subsquareLat * (1 / 24) + (0.5 / 24);
+  } else {
+    longitude += 1; // center of 2-degree square
+    latitude += 0.5; // center of 1-degree square
+  }
+
+  if (g.length >= 8) {
+    const extLon = parseInt(g[6], 10);
+    const extLat = parseInt(g[7], 10);
+    if (isNaN(extLon) || isNaN(extLat)) return null;
+    longitude += extLon * (2 / 240) - (1 / 24);
+    latitude += extLat * (1 / 240) - (0.5 / 24);
+  }
+
+  longitude -= 180;
+  latitude -= 90;
+
+  return { latitude, longitude };
+}
+
 function takeIndex(value: number, size: number): { index: number; remainder: number } {
   const index = Math.floor(value / size);
   return {
