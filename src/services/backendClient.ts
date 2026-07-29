@@ -557,14 +557,17 @@ async function request(
 }
 
 function joinUrl(baseUrl: string, path: string): string {
-  // When running in a local dev/preview server (localhost or LAN IP),
-  // rewrite the public API URL to use the same-origin /log2go-api/ proxy.
-  // In production (log2goapp.net), hit the API URL directly — NPM
-  // proxies api.log2goapp.net to the backend server.
+  // When running in the web preview server (localhost:54337), rewrite the
+  // public API URL to use the same-origin /log2go-api/ proxy so the browser
+  // doesn't hit CORS issues. In Electron (file:// origin) and in production
+  // (log2goapp.net), hit the API URL directly.
   if (typeof window !== 'undefined' && baseUrl.includes('api.log2goapp.net')) {
     const origin = window.location.origin;
-    const isLocalDev = origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes(':54337');
-    if (isLocalDev) {
+    const isFileOrigin = origin.startsWith('file://');
+    // Electron loads via file:// — it should hit the API directly (no proxy).
+    // Only the web preview server on localhost:54337 has a /log2go-api/ proxy.
+    const isWebPreview = !isFileOrigin && (origin.includes('localhost:54337') || origin.includes('127.0.0.1:54337'));
+    if (isWebPreview) {
       return `/log2go-api${path}`;
     }
   }

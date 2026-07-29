@@ -540,11 +540,13 @@ function assertLegacySuccess(text: string, action: string): LegacyNetLoggerResul
 }
 
 function joinUrl(baseUrl: string, path: string): string {
-  // Same-origin proxy rewrite only for local dev/preview (see backendClient.ts)
+  // Same-origin proxy rewrite only for web preview (see backendClient.ts).
+  // Electron (file:// origin) always hits the API directly.
   if (typeof window !== 'undefined' && baseUrl.includes('api.log2goapp.net')) {
     const origin = window.location.origin;
-    const isLocalDev = origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes(':54337');
-    if (isLocalDev) {
+    const isFileOrigin = origin.startsWith('file://');
+    const isWebPreview = !isFileOrigin && (origin.includes('localhost:54337') || origin.includes('127.0.0.1:54337'));
+    if (isWebPreview) {
       return `/log2go-api${path}`;
     }
   }
