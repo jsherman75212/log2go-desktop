@@ -4,6 +4,7 @@ import {
   login as apiLogin,
   startRegistration,
   getAccountProfile,
+  ApiError,
   type RegistrationStartResponse,
   type AccountProfile,
 } from '../services/backendClient';
@@ -101,8 +102,8 @@ export function AuthGate({
   // transition to pending, not the auto-check on mount.
   const suppressAutoPendingRef = useRef(true);
 
-  // ── Try to log in, fall back to registration if credentials unknown ─
-  const attemptLogin = useCallback(async (username: string, password: string): Promise<boolean> => {
+  // ── Try to log in, return result with error info ──────────────────
+  const attemptLogin = useCallback(async (username: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const tokenResponse = await apiLogin(baseUrl, username, password, undefined);
       if (tokenResponse.access_token) {
@@ -111,12 +112,22 @@ export function AuthGate({
         saveKeepLoggedInPref(shouldKeep);
         setView('logged-in');
         onLoginSuccess(tokenResponse.access_token, profile, shouldKeep);
-        return true;
+        return { success: true };
       }
-    } catch {
-      // Login failed — credentials might be unknown
+    } catch (err: unknown) {
+      // Parse the error to give a useful message
+      if (err instanceof ApiError) {
+        if (err.status === 401) {
+          return { success: false, error: 'Invalid username or password.' };
+        }
+        return { success: false, error: `Login failed (HTTP ${err.status}).` };
+      }
+      if (err instanceof TypeError && (err as TypeError).message === 'Failed to fetch') {
+        return { success: false, error: 'Cannot reach the server. Check your internet connection.' };
+      }
+      return { success: false, error: 'Login failed. Please try again.' };
     }
-    return false;
+    return { success: false, error: 'Login failed. Please try again.' };
   }, [baseUrl, keepLoggedIn, onLoginSuccess, persistentLogin]);
 
   // ── Handle "Login/Register" button click ──────────────────────────
@@ -129,17 +140,14 @@ export function AuthGate({
     setBusy(true);
     setError('');
 
-    const success = await attemptLogin(username, loginPassword);
-    if (success) {
+    const result = await attemptLogin(username, loginPassword);
+    if (result.success) {
       setBusy(false);
       return;
     }
 
-    // Login failed — switch to registration view, pre-fill callsign
-    // from whatever the user typed as their username.
-    setRegCallsign(username.toUpperCase());
-    setRegEmail('');
-    setView('register');
+    // Show the specific error message — do NOT auto-redirect to registration
+    setError(result.error || 'Login failed. Please try again.');
     setBusy(false);
   }, [attemptLogin, loginUsername, loginPassword]);
 
@@ -359,7 +367,15 @@ export function AuthGate({
               onClick={() => void handleLoginOrRegister()}
               disabled={busy || !loginUsername.trim() || !loginPassword}
             >
-              {busy ? 'Checking…' : 'Login / Register'}
+              {busy ? 'Checking…' : 'Log In'}
+            </button>
+            <button
+              className="auth-gate-text-btn"
+              onClick={() => { setRegCallsign(loginUsername.trim().toUpperCase()); setRegEmail(''); setView('register'); }}
+              disabled={busy}
+              type="button"
+            >
+              Create a new account →
             </button>
             {onSkipLogin && (
               <button
