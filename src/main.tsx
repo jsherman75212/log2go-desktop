@@ -614,6 +614,25 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
     return () => window.removeEventListener('pagehide', scheduleCloseCleanup);
   }, []);
 
+  // Trigger to send pending unsubscribe
+  const [sendPendingUnsubscribe, setSendPendingUnsubscribe] = useState(0);
+  
+  useEffect(() => {
+    if (pendingUnsubscribeRef.current) {
+      const { serverName, netName, callsign, operatorName, backendBaseUrl, sessionId } = pendingUnsubscribeRef.current;
+      scheduleDelayedUnsubscribeBeacon({
+        serverName,
+        netName,
+        callsign,
+        operatorName,
+        backendBaseUrl,
+        sessionId,
+        delaySeconds: 30, // Send sooner since user explicitly left
+      });
+      pendingUnsubscribeRef.current = null;
+    }
+  }, [sendPendingUnsubscribe]);
+
   const contactsByNewest = useMemo(
     () => [...loggingState.contacts].sort((a, b) => b.contactedAt.localeCompare(a.contactedAt)),
     [loggingState.contacts],
@@ -875,6 +894,8 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
     if (!net) return;
     if (!net.serverName || !net.netName) return; // guard against partial state during transitions
     if (netRefreshInFlightRef.current) return;
+    // Don't refresh if user has left the net
+    if (!selectedNet || selectedNet.netName !== net.netName) return;
     netRefreshInFlightRef.current = true;
     const currentAimId = aimLastIdRef.current;
     const shouldFetchAim = Date.now() >= aimRateLimitCooldownUntilRef.current;
@@ -2388,9 +2409,6 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
       return setBackendSettings(state, {
         backendBaseUrl: state.backendBaseUrl,
         username: profile.username,
-        // Web is per-session: token goes in memory for API calls but
-        // password is not stored. AuthGate with persistentLogin=false
-        // will never try to reuse the token on next visit.
         password: '',
         accessToken: token,
       });
@@ -2406,6 +2424,7 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
           const stateWithToken = setBackendSettings(state, { accessToken: token, username: profile.username, password: '' });
           const serverHasProfiles = hasConfiguredStationProfile(serverCollection);
           const localHasProfiles = hasConfiguredStationProfile(stateWithToken.profileCollection);
+          
           if (serverHasProfiles) {
             setNetsStatus(`Loaded ${serverCollection.profiles.length} station profile(s) from Log2Go account.`);
             return applyStationProfileCollection(stateWithToken, serverCollection);
@@ -2418,20 +2437,54 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
             return stateWithToken;
           }
 
+          // No profiles exist — check if user wants to operate as SWL or create a profile
+          // For now, create a default SWL profile with W1AW location
+          const isSWL = profile.callsign?.toUpperCase() === 'SWL' || profile.username?.toUpperCase() === 'SWL';
+          const defaultCallsign = isSWL ? 'SWL' : (profile.callsign || profile.username || 'OPERATOR');
+          const defaultGrid = isSWL ? 'FN31pr' : ''; // W1AW grid if SWL, empty otherwise
+          const defaultCity = isSWL ? 'Newington' : '';
+          const defaultState = isSWL ? 'CT' : '';
+          
           const seeded = addProfileAction(stateWithToken, {
-            callsign: profile.callsign || profile.username,
-            profileName: profile.callsign || profile.username,
+            callsign: defaultCallsign,
+            profileName: defaultCallsign === 'SWL' ? 'SWL Station' : defaultCallsign,
+            operatorName: profile.callsign || profile.username,
+            homeGrid: defaultGrid,
+            city: defaultCity,
+            state: defaultState,
             defaultMode: 'SSB',
             mobilePortableStatus: 'fixed',
           });
           void saveStationProfiles(seeded.backendBaseUrl, token, seeded.profileCollection)
-            .then(() => setNetsStatus('Created and saved default station profile to Log2Go account.'))
+            .then(() => setNetsStatus(isSWL ? 'Created SWL station profile (W1AW location).' : 'Created default station profile. Please edit to add your location.'))
             .catch((error) => setNetsStatus(`Station profile save failed: ${error instanceof Error ? error.message : String(error)}`));
           return seeded;
         });
       })
       .catch((error) => setNetsStatus(`Could not load station profiles from Log2Go account: ${error instanceof Error ? error.message : String(error)}`));
   }, [loggingState.backendBaseUrl]);
+
+  // ── SWL login (no account) ─────────────────────────────────────
+  const handleSWLLogin = useCallback(() => {
+    setAuthGateVisible(false);
+    setTab('settings');
+    // Create SWL profile with W1AW location
+    const swlProfile = {
+      callsign: 'SWL',
+      profileName: 'SWL Station',
+      operatorName: 'SWL Operator',
+      homeGrid: 'FN31pr', // W1AW
+      city: 'Newington',
+      state: 'CT',
+      defaultMode: 'SSB',
+      mobilePortableStatus: 'fixed' as const,
+    };
+    setLoggingState((state) => {
+      const seeded = addProfileAction(state, swlProfile);
+      setNetsStatus('SWL station profile created (W1AW location). You can edit this in Settings.');
+      return seeded;
+    });
+  }, []);
 
   // ── Station profile management ─────────────────────────────────────
   const handleActivateProfile = useCallback((profileId: string) => {
@@ -2596,53 +2649,64 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
     }
   }, [aimDraft, aimJoined, loggingState.backendBaseUrl, loggingState.stationProfile.callsign, loggingState.stationProfile.operatorName, refreshSelectedNet, selectedNet]);
 
+  // Track pending unsubscribe to be sent by beacon
+  const pendingUnsubscribeRef = useRef<{
+    serverName: string;
+    netName: string;
+    callsign: string;
+    operatorName: string;
+    backendBaseUrl: string;
+    sessionId: string;
+  } | null>(null);
+
   const leaveNet = useCallback(async () => {
     const net = selectedNet;
     if (!net) return;
     const callsign = loggingState.stationProfile.callsign.trim().toUpperCase();
-    setBusy(true);
-    setNetsStatus(`Leaving ${net.netName}...`);
-    try {
-      if (aimJoined) {
-        if (net.source === 'log2go' && net.net_id) {
-          await unsubscribeLog2GoNet(
-            loggingState.backendBaseUrl,
-            net.net_id,
-            callsign,
-            loggingState.stationProfile.operatorName,
-          ).catch((error) => console.warn('Log2Go unsubscribe failed:', error));
-        } else {
-          await unsubscribeFromNet({
-            serverName: net.serverName,
-            netName: net.netName,
-            callsign,
-            operatorName: loggingState.stationProfile.operatorName,
-            backendBaseUrl: loggingState.backendBaseUrl,
-          }).catch((error) => console.warn('NetLogger unsubscribe failed:', error));
-        }
-      }
-    } finally {
-      setSelectedNet(undefined);
-      setSelectedNetType(null);
-      setSelectedRosterKey(undefined);
-      setCheckins([]);
-      setCurrentOperatingSerial(undefined);
-      setAimMessages([]);
-      setMonitors([]);
-      setAimJoined(false);
-      setMonitoringRosterOnly(false);
-      setAimDraft('');
-      setAimLastId(0);
-      setShowAim(false);
-      setShowMonitors(false);
-      setCurrentOperatingSerial(undefined);
-      aimLastIdRef.current = 0;
-      lastExtDataSerialRef.current = 0;
-      setNetsListInterval(20);
-      setNetsStatus('Left net. Select another net or navigate away.');
-      setBusy(false);
+    
+    // Clear UI immediately — user can move on
+    setSelectedNet(undefined);
+    setSelectedNetType(null);
+    setSelectedRosterKey(undefined);
+    setCheckins([]);
+    setCurrentOperatingSerial(undefined);
+    setAimMessages([]);
+    setMonitors([]);
+    setAimJoined(false);
+    setMonitoringRosterOnly(false);
+    setAimDraft('');
+    setAimLastId(0);
+    setShowAim(false);
+    setShowMonitors(false);
+    aimLastIdRef.current = 0;
+    lastExtDataSerialRef.current = 0;
+    setNetsListInterval(20);
+    setNetsStatus(`Left ${net.netName}. Unsubscribe will be sent shortly.`);
+    setBusy(false);
+    
+    // Queue unsubscribe in background — beacon will send it
+    if (aimJoined && net.source !== 'log2go') {
+      pendingUnsubscribeRef.current = {
+        serverName: net.serverName,
+        netName: net.netName,
+        callsign,
+        operatorName: loggingState.stationProfile.operatorName || '',
+        backendBaseUrl: loggingState.backendBaseUrl,
+        sessionId: netPresenceRef.current.sessionId,
+      };
+      console.log('[leaveNet] Queued NetLogger unsubscribe for:', net.serverName, net.netName);
+      setSendPendingUnsubscribe(n => n + 1); // Trigger beacon send
+    } else if (aimJoined && net.source === 'log2go' && net.net_id) {
+      // Log2Go unsubscribe — fire and forget in background
+      unsubscribeLog2GoNet(
+        loggingState.backendBaseUrl,
+        net.net_id,
+        callsign,
+        loggingState.stationProfile.operatorName || '',
+      ).catch((error) => console.warn('[leaveNet] Log2Go unsubscribe failed:', error));
+      console.log('[leaveNet] Queued Log2Go unsubscribe for net_id:', net.net_id);
     }
-  }, [aimJoined, loggingState.backendBaseUrl, loggingState.stationProfile.callsign, loggingState.stationProfile.operatorName, selectedNet]);
+  }, [selectedNet, aimJoined, loggingState.backendBaseUrl, loggingState.stationProfile.callsign, loggingState.stationProfile.operatorName]);
 
   /** Open a past (closed) net in read-only history view. */
   const openPastNet = useCallback(async (net: PastNetInfo) => {
@@ -2739,13 +2803,13 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
         </div>
       </div>
 
-      {/* ── Offline Status Bar ─────────────────────────────────────── */}
-      {offlineStatus.isDesktop && (
-        <OfflineStatusBar status={offlineStatus} />
-      )}
-
       {tab === 'dashboard' ? (
-        <DashboardTab accessToken={loggingState.accessToken} backendBaseUrl={loggingState.backendBaseUrl} />
+        <DashboardTab 
+          accessToken={loggingState.accessToken} 
+          backendBaseUrl={loggingState.backendBaseUrl}
+          accountProfile={accountProfile}
+          stationGrid={loggingState.stationProfile.homeGrid}
+        />
       ) : tab === 'netlogger' ? (
         <>
         {viewingHistory ? (
@@ -3881,7 +3945,7 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
         <AuthGate
           baseUrl={loggingState.backendBaseUrl}
           onLoginSuccess={handleAuthLoginSuccess}
-          onSkipLogin={() => setAuthGateVisible(false)}
+          onSkipLogin={handleSWLLogin}
           existingToken={loggingState.accessToken}
           deviceType="Web"
           visible={authGateVisible}
@@ -5423,19 +5487,6 @@ function RecentContactsPanel({ contacts }: { contacts: Contact[] }) {
           <p key={contact.id}><b>{contact.callsign}</b> {contact.mode} {contact.band ?? ''} {contact.netLoggerContext?.netName ?? ''}<br /><span>{contact.contactedAt}</span></p>
         ))}
       </div>
-    </div>
-  );
-}
-
-function OfflineStatusBar({ status }: { status: OfflineStatus }) {
-  return (
-    <div className={`offline-status-bar ${status.isOnline ? 'online' : 'offline'}`}>
-      <span className={`offline-status-dot ${status.isOnline ? 'online' : 'offline'}`} />
-      <span>{status.isOnline ? 'Online' : 'Offline'}</span>
-      {status.stats.pendingSync > 0 && <span>{status.stats.pendingSync} pending sync</span>}
-      <button className="sync-now-btn" onClick={() => void status.syncNow()} disabled={status.syncing}>
-        {status.syncing ? 'Syncing...' : 'Sync Now'}
-      </button>
     </div>
   );
 }
