@@ -549,7 +549,6 @@ async function request(
 
   if (!response.ok) {
     const responseText = await response.text();
-
     throw new ApiError(response.status, responseText, parseJsonResponse(responseText));
   }
 
