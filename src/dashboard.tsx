@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getDXSpots, type DXSpot } from './services/backendClient';
 
 // ── Station fallback (used before account profile loads) ──
-const DEFAULT_STATION = { lat: 32.9178, lng: -97.7444, callsign: 'KE5ZQV', grid: 'EM13BE' };
+// Use generic placeholder - never show another user's callsign
+const DEFAULT_STATION = { lat: 32.9178, lng: -97.7444, callsign: '', grid: '' };
 
 interface DashboardContact {
   call: string;
@@ -197,14 +198,22 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
 
   // ── Globe ──
   useEffect(() => {
+    console.log('[Dashboard] Globe effect starting, globeRef.current:', !!globeRef.current);
     if (!globeRef.current) return;
     const container = globeRef.current;
+    console.log('[Dashboard] Container dimensions:', container.clientWidth, 'x', container.clientHeight);
     let globe: any = null;
 
     function initGlobe() {
-      if (!container || container.clientWidth === 0) return;
+      console.log('[Dashboard] initGlobe called, container:', !!container, 'clientWidth:', container?.clientWidth);
+      if (!container || container.clientWidth === 0) {
+        console.log('[Dashboard] Container not ready, retrying in 300ms');
+        setTimeout(initGlobe, 300);
+        return;
+      }
       // @ts-ignore — globe.gl loaded from CDN script
       const G = window.Globe;
+      console.log('[Dashboard] window.Globe available:', !!G);
       if (!G) { setTimeout(initGlobe, 300); return; }
 
       const contactPts: any[] = [];
@@ -229,8 +238,9 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
       const stationPts = [{ lat: STATION.lat, lng: STATION.lng, label: `${STATION.callsign} · ${STATION.grid} · Home`, color: '#00b4ff', size: 0.8 }];
 
       globe = G()
-        .globeImageUrl('/dashboard/img/earth-blue-marble.jpg')
-        .bumpImageUrl('/dashboard/img/earth-topology.png')
+        // Use Log2Go web app's hosted textures (publicly accessible)
+        .globeImageUrl('https://log2goapp.net/dashboard/img/earth-blue-marble.jpg')
+        .bumpImageUrl('https://log2goapp.net/dashboard/img/earth-topology.png')
         .showAtmosphere(true)
         .atmosphereColor('#00b4ff')
         .atmosphereAltitude(0.15)
@@ -264,7 +274,9 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
     // Load globe.gl script if not already loaded
     if (!(window as any).Globe) {
       const script = document.createElement('script');
-      script.src = '/dashboard/js/globe.gl.min.js';
+      // Use CDN for globe.gl — works in Electron (file://) and web
+      script.src = 'https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js';
+      script.crossOrigin = 'anonymous';
       script.onload = () => initGlobe();
       document.head.appendChild(script);
     } else {
@@ -286,11 +298,12 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
     const g = globeObjRef.current;
     if (!g) return;
     if (globeView === 'day') {
-      g.globeImageUrl('/dashboard/img/earth-blue-marble.jpg');
-      g.bumpImageUrl('/dashboard/img/earth-topology.png');
+      // Use Log2Go web app's hosted textures (publicly accessible)
+      g.globeImageUrl('https://log2goapp.net/dashboard/img/earth-blue-marble.jpg');
+      g.bumpImageUrl('https://log2goapp.net/dashboard/img/earth-topology.png');
       g.showAtmosphere(true);
     } else {
-      g.globeImageUrl('/dashboard/img/earth-night.jpg');
+      g.globeImageUrl('https://log2goapp.net/dashboard/img/earth-night.jpg');
       g.bumpImageUrl(null);
       g.showAtmosphere(true);
     }
