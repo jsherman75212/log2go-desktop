@@ -16,6 +16,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: false,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
