@@ -511,6 +511,84 @@ export async function qrzLookup(baseUrl: string, token: string, callsign: string
   });
 }
 
+
+// ── Stripe Subscription API ────────────────────────────────────────────
+
+export type SubscriptionPrice = {
+  price_id: string;
+  plan: string;
+  amount: number;
+  currency: string;
+  interval: string;
+  display_price: string;
+  display_name: string;
+};
+
+export type SubscriptionPricesResponse = {
+  prices: SubscriptionPrice[];
+  publishable_key: string;
+};
+
+export type SubscriptionStatus = {
+  subscription_status: string;
+  is_active: boolean;
+  stripe_customer_id: string | null;
+  free_lifetime_reason: string | null;
+  current_period_end?: string;
+  price_id?: string;
+  plan_name?: string;
+};
+
+export type CheckoutSessionResponse = {
+  url: string;
+};
+
+export type PortalSessionResponse = {
+  url: string;
+};
+
+export async function getSubscriptionPrices(
+  baseUrl: string,
+): Promise<SubscriptionPricesResponse> {
+  return requestJson<SubscriptionPricesResponse>(baseUrl, '/api/v1/subscription/prices', {
+    method: 'GET',
+  });
+}
+
+export async function getSubscriptionStatus(
+  baseUrl: string,
+  token: string,
+): Promise<SubscriptionStatus> {
+  return requestJson<SubscriptionStatus>(baseUrl, '/api/v1/subscription/status', {
+    method: 'GET',
+    token,
+  });
+}
+
+export async function createCheckoutSession(
+  baseUrl: string,
+  token: string,
+  priceId: string,
+  successUrl: string,
+  cancelUrl: string,
+): Promise<CheckoutSessionResponse> {
+  return requestJson<CheckoutSessionResponse>(baseUrl, '/api/v1/subscription/checkout', {
+    method: 'POST',
+    token,
+    body: JSON.stringify({ price_id: priceId, success_url: successUrl, cancel_url: cancelUrl }),
+  });
+}
+
+export async function createPortalSession(
+  baseUrl: string,
+  token: string,
+): Promise<PortalSessionResponse> {
+  return requestJson<PortalSessionResponse>(baseUrl, '/api/v1/subscription/portal', {
+    method: 'POST',
+    token,
+  });
+}
+
 type ApiRequestOptions = {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   token?: string;
@@ -549,6 +627,7 @@ async function request(
 
   if (!response.ok) {
     const responseText = await response.text();
+
     throw new ApiError(response.status, responseText, parseJsonResponse(responseText));
   }
 
@@ -583,4 +662,41 @@ function parseJsonResponse(responseText: string): unknown {
   } catch {
     return responseText;
   }
+}
+export async function importAdif(
+  baseUrl: string,
+  token: string,
+  file: File,
+): Promise<{ imported: number; updated: number; skipped: number; errors: string[] }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const url = baseUrl + '/api/v1/import/adif';
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token },
+    body: formData,
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error('ADIF import failed: ' + detail);
+  }
+  return res.json();
+}
+
+
+export async function getCallsignLocations(
+  baseUrl: string,
+  token: string,
+  callsigns: string[],
+): Promise<Record<string, { lat: number; lng: number; grid: string; country: string }>> {
+  const res = await fetch(baseUrl + '/api/v1/callsign-locations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify(callsigns),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error('Callsign location lookup failed: ' + detail);
+  }
+  return res.json();
 }

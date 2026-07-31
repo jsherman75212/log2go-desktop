@@ -1,5 +1,4 @@
 import type { LoggingFlowState, AccountCredentials, LicenseClass } from './loggingFlow';
-import { validateBackendUrl } from './loggingFlow';
 import type { NetLoggerState } from './netloggerState';
 import { createInitialNetLoggerState } from './netloggerState';
 
@@ -135,7 +134,7 @@ export async function loadPersistentLoggingState(
 
   if (source === null) {
     // No persisted state — use fallback with credentials from SecureStore
-    const state = {
+    return {
       ...fallback,
       password: secureResults[0] ?? fallback.password,
       accessToken: secureResults[1] ?? fallback.accessToken,
@@ -144,9 +143,6 @@ export async function loadPersistentLoggingState(
         accounts,
       },
     };
-    // Validate backend URL even for fresh state
-    const validatedUrl = await validateBackendUrl(state.backendBaseUrl);
-    return validatedUrl !== state.backendBaseUrl ? { ...state, backendBaseUrl: validatedUrl } : state;
   }
 
   try {
@@ -158,7 +154,7 @@ export async function loadPersistentLoggingState(
 
     // v3: current format
     if (parsed.version === 3) {
-      const state = {
+      return {
         ...parsed,
         version: 3,
         password: secureResults[0] ?? parsed.password ?? fallback.password,
@@ -169,13 +165,11 @@ export async function loadPersistentLoggingState(
         },
         licenseClass: parsed.licenseClass,
       };
-      const validatedUrl = await validateBackendUrl(state.backendBaseUrl);
-      return validatedUrl !== state.backendBaseUrl ? { ...state, backendBaseUrl: validatedUrl } : state;
     }
 
     // v2: older format without settings grouping
     if (parsed.version === 2) {
-      const state = {
+      return {
         ...parsed,
         version: 3,
         password: secureResults[0] ?? parsed.password ?? fallback.password,
@@ -186,13 +180,11 @@ export async function loadPersistentLoggingState(
         },
         licenseClass: undefined,
       };
-      const validatedUrl = await validateBackendUrl(state.backendBaseUrl);
-      return validatedUrl !== state.backendBaseUrl ? { ...state, backendBaseUrl: validatedUrl } : state;
     }
 
     // v1: oldest format
     if (parsed.version === 1) {
-      const state = {
+      return {
         ...parsed,
         version: 3,
         password: secureResults[0] ?? parsed.password ?? fallback.password,
@@ -203,8 +195,6 @@ export async function loadPersistentLoggingState(
         },
         licenseClass: undefined,
       };
-      const validatedUrl = await validateBackendUrl(state.backendBaseUrl);
-      return validatedUrl !== state.backendBaseUrl ? { ...state, backendBaseUrl: validatedUrl } : state;
     }
 
     return fallback;

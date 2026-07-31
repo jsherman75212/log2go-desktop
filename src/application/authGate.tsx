@@ -4,7 +4,6 @@ import {
   login as apiLogin,
   startRegistration,
   getAccountProfile,
-  ApiError,
   type RegistrationStartResponse,
   type AccountProfile,
 } from '../services/backendClient';
@@ -102,7 +101,7 @@ export function AuthGate({
   // transition to pending, not the auto-check on mount.
   const suppressAutoPendingRef = useRef(true);
 
-  // ── Try to log in, return result with error info ──────────────────
+  // ── Try to log in, return error message on failure ──────────────
   const attemptLogin = useCallback(async (username: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const tokenResponse = await apiLogin(baseUrl, username, password, undefined);
@@ -114,27 +113,25 @@ export function AuthGate({
         onLoginSuccess(tokenResponse.access_token, profile, shouldKeep);
         return { success: true };
       }
-    } catch (err: unknown) {
-      // Parse the error to give a useful message
-      if (err instanceof ApiError) {
-        if (err.status === 401) {
+      return { success: false, error: 'Login did not return an access token.' };
+    } catch (err) {
+      // Distinguish between "wrong credentials" and "server unreachable"
+      if (err instanceof Error && 'status' in err) {
+        const apiErr = err as { status: number; responseText?: string };
+        if (apiErr.status === 401) {
           return { success: false, error: 'Invalid username or password.' };
         }
-        return { success: false, error: `Login failed (HTTP ${err.status}).` };
+        return { success: false, error: `Login failed (HTTP ${apiErr.status}).` };
       }
-      if (err instanceof TypeError && (err as TypeError).message === 'Failed to fetch') {
-        return { success: false, error: 'Cannot reach the server. Check your internet connection.' };
-      }
-      return { success: false, error: 'Login failed. Please try again.' };
+      return { success: false, error: err instanceof Error ? err.message : 'Login failed.' };
     }
-    return { success: false, error: 'Login failed. Please try again.' };
   }, [baseUrl, keepLoggedIn, onLoginSuccess, persistentLogin]);
 
-  // ── Handle "Login/Register" button click ──────────────────────────
+  // ── Handle "Login / Register" button click ────────────────────────
   const handleLoginOrRegister = useCallback(async () => {
     const username = loginUsername.trim();
     if (!username || !loginPassword) {
-      setError('Enter your username/callsign and password to log in or register.');
+      setError('Enter your username/callsign and password.');
       return;
     }
     setBusy(true);
@@ -146,8 +143,9 @@ export function AuthGate({
       return;
     }
 
-    // Show the specific error message — do NOT auto-redirect to registration
-    setError(result.error || 'Login failed. Please try again.');
+    // Login failed — show the error and stay on the login form.
+    // User can retry or click "Create account" below to register.
+    setError(result.error ?? 'Login failed.');
     setBusy(false);
   }, [attemptLogin, loginUsername, loginPassword]);
 
@@ -324,7 +322,7 @@ export function AuthGate({
           <div className="auth-gate-section">
             <h2>Log2Go</h2>
             <p className="auth-gate-muted">
-              Enter your username/callsign and password. If you don't have an account yet, we'll set one up.
+              Enter your username/callsign and password to log in.
             </p>
             {error && <div className="auth-gate-error">{error}</div>}
             <div className="auth-gate-form">
@@ -367,11 +365,11 @@ export function AuthGate({
               onClick={() => void handleLoginOrRegister()}
               disabled={busy || !loginUsername.trim() || !loginPassword}
             >
-              {busy ? 'Checking…' : 'Log In'}
+              {busy ? 'Logging in…' : 'Log In'}
             </button>
             <button
               className="auth-gate-text-btn"
-              onClick={() => { setRegCallsign(loginUsername.trim().toUpperCase()); setRegEmail(''); setView('register'); }}
+              onClick={() => { setRegCallsign(loginUsername.trim().toUpperCase()); setRegEmail(''); setView('register'); setError(''); }}
               disabled={busy}
               type="button"
             >

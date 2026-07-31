@@ -71,13 +71,18 @@ import {
   updateContact as backendUpdateContact,
   deleteContact as backendDeleteContact,
   uploadToServices,
+  importAdif,
   updateAccountPassword,
   type ServiceSyncReport,
   checkLotwCertificate,
   uploadLotwCertificate,
   type LotwCertStatus,
+  getSubscriptionPrices,
+  getSubscriptionStatus,
+  createCheckoutSession,
+  createPortalSession,
 } from './services/backendClient';
-import type { AccountProfile, BackendContactResponse, ApiKeyOut, ContestCalendarEvent, ServiceCredentialOut, QrzLookupResult } from './services/backendClient';
+import type { AccountProfile, BackendContactResponse, ApiKeyOut, ContestCalendarEvent, ServiceCredentialOut, QrzLookupResult, SubscriptionPrice, SubscriptionStatus } from './services/backendClient';
 import {
   draftFromCheckin,
   emptyDraft,
@@ -109,9 +114,9 @@ import { getActiveProfile } from './domain/stationProfiles';
 import type { Contact, StationProfile, StationProfileCollection, MobilePortableStatus } from './domain/models';
 import { AuthGate } from './application/authGate';
 import { MatrixClock } from './application/matrixClock';
-import { setBackendSettings } from './application/loggingFlow';
 import { useOfflineStatus, type OfflineStatus } from './application/useOfflineStatus';
 import { offlineDb } from './services/offlineDb';
+import { setBackendSettings } from './application/loggingFlow';
 import './styles.css';
 
 // NetLogger parity features
@@ -433,6 +438,7 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
   const [query, setQuery] = useState('');
   const [accountProfile, setAccountProfile] = useState<AccountProfile>();
   const [busy, setBusy] = useState(false);
+  const [appSubStatus, setAppSubStatus] = useState<SubscriptionStatus | null>(null);
   const [logContactModalOpen, setLogContactModalOpen] = useState(false);
   const [modalDraft, setModalDraft] = useState<ContactDraft>(emptyDraft);
   const [authGateVisible, setAuthGateVisible] = useState(false);
@@ -454,6 +460,7 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
 
   // ── NetLogger parity: preferences, highlighter, find, AIM ignore ────
   const { prefs, update: updatePrefs, reset: resetPrefs } = usePreferences();
+  const offlineStatus: OfflineStatus = useOfflineStatus(loggingState.backendBaseUrl, loggingState.accessToken ?? "");
   const [showPreferences, setShowPreferences] = useState(false);
   const [highlighterMode, setHighlighterMode] = useState<'manual' | 'automatic'>(
     () => prefs.manualHighlighterStartup ? 'manual' : 'automatic'
@@ -517,6 +524,14 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
   const restoredNetSessionRef = useRef(false);
   const netSessionHydratedRef = useRef(false);
   const contestSessionHydratedRef = useRef(!isReloadNavigation());
+
+  // Fetch subscription status for logbook sync gate
+  useEffect(() => {
+    if (!loggingState.accessToken) return;
+    getSubscriptionStatus(loggingState.backendBaseUrl, loggingState.accessToken)
+      .then(setAppSubStatus)
+      .catch(() => {});
+  }, [loggingState.accessToken, loggingState.backendBaseUrl]);
 
   // Keep refs in sync for use inside interval callbacks
   useEffect(() => { aimLastIdRef.current = aimLastId; }, [aimLastId]);
@@ -613,25 +628,6 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
     window.addEventListener('pagehide', scheduleCloseCleanup);
     return () => window.removeEventListener('pagehide', scheduleCloseCleanup);
   }, []);
-
-  // Trigger to send pending unsubscribe
-  const [sendPendingUnsubscribe, setSendPendingUnsubscribe] = useState(0);
-  
-  useEffect(() => {
-    if (pendingUnsubscribeRef.current) {
-      const { serverName, netName, callsign, operatorName, backendBaseUrl, sessionId } = pendingUnsubscribeRef.current;
-      scheduleDelayedUnsubscribeBeacon({
-        serverName,
-        netName,
-        callsign,
-        operatorName,
-        backendBaseUrl,
-        sessionId,
-        delaySeconds: 30, // Send sooner since user explicitly left
-      });
-      pendingUnsubscribeRef.current = null;
-    }
-  }, [sendPendingUnsubscribe]);
 
   const contactsByNewest = useMemo(
     () => [...loggingState.contacts].sort((a, b) => b.contactedAt.localeCompare(a.contactedAt)),
@@ -733,12 +729,6 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
       setAuthGateVisible(true);
     }
   }, [persistenceReady]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Offline status (desktop-only feature) ──────────────────────────
-  const offlineStatus = useOfflineStatus(
-    loggingState.backendBaseUrl,
-    loggingState.accessToken ?? '',
-  );
 
   // ── Fetch all backend contacts for the recent contacts panel ──────
   useEffect(() => {
@@ -894,8 +884,6 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
     if (!net) return;
     if (!net.serverName || !net.netName) return; // guard against partial state during transitions
     if (netRefreshInFlightRef.current) return;
-    // Don't refresh if user has left the net
-    if (!selectedNet || selectedNet.netName !== net.netName) return;
     netRefreshInFlightRef.current = true;
     const currentAimId = aimLastIdRef.current;
     const shouldFetchAim = Date.now() >= aimRateLimitCooldownUntilRef.current;
@@ -2133,33 +2121,6 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
       if (result.backendContact) {
         setAllBackendContacts((prev) => [result.backendContact!, ...prev]);
       }
-      // ── Also save to local offline DB ────────────────────────────
-      if (offlineStatus.isDesktop) {
-        try {
-          const localId = await offlineDb.insertContact({
-            callsign: draftInput.callsign.trim().toUpperCase(),
-            qso_date: new Date().toISOString().slice(0, 10),
-            time_on: new Date().toISOString().slice(11, 19),
-            mode: draftInput.mode.trim() || 'SSB',
-            band: draftInput.band.trim() || undefined,
-            freq: draftInput.frequency.trim() || undefined,
-            rst_sent: draftInput.rstSent || '59',
-            rst_rcvd: draftInput.rstReceived || '59',
-            gridsquare: draftInput.grid.trim() || undefined,
-            state: draftInput.qth.trim() || undefined,
-            county: draftInput.county.trim() || undefined,
-            operator_name: draftInput.name.trim() || undefined,
-            net_name: loggingMode === 'nets' && selectedNet ? selectedNet.netName : undefined,
-            station_callsign: loggingState.stationProfile.callsign || undefined,
-            remarks: draftInput.remarks.trim() || undefined,
-          });
-          // If backend sync failed, add to sync queue
-          if (!result.backendContact) {
-            await offlineDb.addToQueue('sync_contact', 'contact', localId);
-          }
-          await offlineStatus.refreshStats();
-        } catch { /* local DB not available in dev mode — ignore */ }
-      }
       setDraft((current) => ({ ...emptyDraft, frequency: current.frequency, band: current.band, mode: current.mode }));
       return true;
     } catch (error) {
@@ -2409,6 +2370,9 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
       return setBackendSettings(state, {
         backendBaseUrl: state.backendBaseUrl,
         username: profile.username,
+        // Web is per-session: token goes in memory for API calls but
+        // password is not stored. AuthGate with persistentLogin=false
+        // will never try to reuse the token on next visit.
         password: '',
         accessToken: token,
       });
@@ -2424,7 +2388,6 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
           const stateWithToken = setBackendSettings(state, { accessToken: token, username: profile.username, password: '' });
           const serverHasProfiles = hasConfiguredStationProfile(serverCollection);
           const localHasProfiles = hasConfiguredStationProfile(stateWithToken.profileCollection);
-          
           if (serverHasProfiles) {
             setNetsStatus(`Loaded ${serverCollection.profiles.length} station profile(s) from Log2Go account.`);
             return applyStationProfileCollection(stateWithToken, serverCollection);
@@ -2437,54 +2400,20 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
             return stateWithToken;
           }
 
-          // No profiles exist — check if user wants to operate as SWL or create a profile
-          // For now, create a default SWL profile with W1AW location
-          const isSWL = profile.callsign?.toUpperCase() === 'SWL' || profile.username?.toUpperCase() === 'SWL';
-          const defaultCallsign = isSWL ? 'SWL' : (profile.callsign || profile.username || 'OPERATOR');
-          const defaultGrid = isSWL ? 'FN31pr' : ''; // W1AW grid if SWL, empty otherwise
-          const defaultCity = isSWL ? 'Newington' : '';
-          const defaultState = isSWL ? 'CT' : '';
-          
           const seeded = addProfileAction(stateWithToken, {
-            callsign: defaultCallsign,
-            profileName: defaultCallsign === 'SWL' ? 'SWL Station' : defaultCallsign,
-            operatorName: profile.callsign || profile.username,
-            homeGrid: defaultGrid,
-            city: defaultCity,
-            state: defaultState,
+            callsign: profile.callsign || profile.username,
+            profileName: profile.callsign || profile.username,
             defaultMode: 'SSB',
             mobilePortableStatus: 'fixed',
           });
           void saveStationProfiles(seeded.backendBaseUrl, token, seeded.profileCollection)
-            .then(() => setNetsStatus(isSWL ? 'Created SWL station profile (W1AW location).' : 'Created default station profile. Please edit to add your location.'))
+            .then(() => setNetsStatus('Created and saved default station profile to Log2Go account.'))
             .catch((error) => setNetsStatus(`Station profile save failed: ${error instanceof Error ? error.message : String(error)}`));
           return seeded;
         });
       })
       .catch((error) => setNetsStatus(`Could not load station profiles from Log2Go account: ${error instanceof Error ? error.message : String(error)}`));
   }, [loggingState.backendBaseUrl]);
-
-  // ── SWL login (no account) ─────────────────────────────────────
-  const handleSWLLogin = useCallback(() => {
-    setAuthGateVisible(false);
-    setTab('settings');
-    // Create SWL profile with W1AW location
-    const swlProfile = {
-      callsign: 'SWL',
-      profileName: 'SWL Station',
-      operatorName: 'SWL Operator',
-      homeGrid: 'FN31pr', // W1AW
-      city: 'Newington',
-      state: 'CT',
-      defaultMode: 'SSB',
-      mobilePortableStatus: 'fixed' as const,
-    };
-    setLoggingState((state) => {
-      const seeded = addProfileAction(state, swlProfile);
-      setNetsStatus('SWL station profile created (W1AW location). You can edit this in Settings.');
-      return seeded;
-    });
-  }, []);
 
   // ── Station profile management ─────────────────────────────────────
   const handleActivateProfile = useCallback((profileId: string) => {
@@ -2649,64 +2578,53 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
     }
   }, [aimDraft, aimJoined, loggingState.backendBaseUrl, loggingState.stationProfile.callsign, loggingState.stationProfile.operatorName, refreshSelectedNet, selectedNet]);
 
-  // Track pending unsubscribe to be sent by beacon
-  const pendingUnsubscribeRef = useRef<{
-    serverName: string;
-    netName: string;
-    callsign: string;
-    operatorName: string;
-    backendBaseUrl: string;
-    sessionId: string;
-  } | null>(null);
-
   const leaveNet = useCallback(async () => {
     const net = selectedNet;
     if (!net) return;
     const callsign = loggingState.stationProfile.callsign.trim().toUpperCase();
-    
-    // Clear UI immediately — user can move on
-    setSelectedNet(undefined);
-    setSelectedNetType(null);
-    setSelectedRosterKey(undefined);
-    setCheckins([]);
-    setCurrentOperatingSerial(undefined);
-    setAimMessages([]);
-    setMonitors([]);
-    setAimJoined(false);
-    setMonitoringRosterOnly(false);
-    setAimDraft('');
-    setAimLastId(0);
-    setShowAim(false);
-    setShowMonitors(false);
-    aimLastIdRef.current = 0;
-    lastExtDataSerialRef.current = 0;
-    setNetsListInterval(20);
-    setNetsStatus(`Left ${net.netName}. Unsubscribe will be sent shortly.`);
-    setBusy(false);
-    
-    // Queue unsubscribe in background — beacon will send it
-    if (aimJoined && net.source !== 'log2go') {
-      pendingUnsubscribeRef.current = {
-        serverName: net.serverName,
-        netName: net.netName,
-        callsign,
-        operatorName: loggingState.stationProfile.operatorName || '',
-        backendBaseUrl: loggingState.backendBaseUrl,
-        sessionId: netPresenceRef.current.sessionId,
-      };
-      console.log('[leaveNet] Queued NetLogger unsubscribe for:', net.serverName, net.netName);
-      setSendPendingUnsubscribe(n => n + 1); // Trigger beacon send
-    } else if (aimJoined && net.source === 'log2go' && net.net_id) {
-      // Log2Go unsubscribe — fire and forget in background
-      unsubscribeLog2GoNet(
-        loggingState.backendBaseUrl,
-        net.net_id,
-        callsign,
-        loggingState.stationProfile.operatorName || '',
-      ).catch((error) => console.warn('[leaveNet] Log2Go unsubscribe failed:', error));
-      console.log('[leaveNet] Queued Log2Go unsubscribe for net_id:', net.net_id);
+    setBusy(true);
+    setNetsStatus(`Leaving ${net.netName}...`);
+    try {
+      if (aimJoined) {
+        if (net.source === 'log2go' && net.net_id) {
+          await unsubscribeLog2GoNet(
+            loggingState.backendBaseUrl,
+            net.net_id,
+            callsign,
+            loggingState.stationProfile.operatorName,
+          ).catch((error) => console.warn('Log2Go unsubscribe failed:', error));
+        } else {
+          await unsubscribeFromNet({
+            serverName: net.serverName,
+            netName: net.netName,
+            callsign,
+            operatorName: loggingState.stationProfile.operatorName,
+            backendBaseUrl: loggingState.backendBaseUrl,
+          }).catch((error) => console.warn('NetLogger unsubscribe failed:', error));
+        }
+      }
+    } finally {
+      setSelectedNet(undefined);
+      setSelectedNetType(null);
+      setSelectedRosterKey(undefined);
+      setCheckins([]);
+      setCurrentOperatingSerial(undefined);
+      setAimMessages([]);
+      setMonitors([]);
+      setAimJoined(false);
+      setMonitoringRosterOnly(false);
+      setAimDraft('');
+      setAimLastId(0);
+      setShowAim(false);
+      setShowMonitors(false);
+      setCurrentOperatingSerial(undefined);
+      aimLastIdRef.current = 0;
+      lastExtDataSerialRef.current = 0;
+      setNetsListInterval(20);
+      setNetsStatus('Left net. Select another net or navigate away.');
+      setBusy(false);
     }
-  }, [selectedNet, aimJoined, loggingState.backendBaseUrl, loggingState.stationProfile.callsign, loggingState.stationProfile.operatorName]);
+  }, [aimJoined, loggingState.backendBaseUrl, loggingState.stationProfile.callsign, loggingState.stationProfile.operatorName, selectedNet]);
 
   /** Open a past (closed) net in read-only history view. */
   const openPastNet = useCallback(async (net: PastNetInfo) => {
@@ -2804,12 +2722,7 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
       </div>
 
       {tab === 'dashboard' ? (
-        <DashboardTab 
-          accessToken={loggingState.accessToken} 
-          backendBaseUrl={loggingState.backendBaseUrl}
-          accountProfile={accountProfile}
-          stationGrid={loggingState.stationProfile.homeGrid}
-        />
+        <DashboardTab accessToken={loggingState.accessToken} backendBaseUrl={loggingState.backendBaseUrl} />
       ) : tab === 'netlogger' ? (
         <>
         {viewingHistory ? (
@@ -3748,6 +3661,7 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
           accountProfile={accountProfile}
           busy={busy}
           setStatus={setNetsStatus}
+          subStatus={appSubStatus}
         />
       ) : tab === 'settings' ? (
         <SettingsTab
@@ -3937,6 +3851,18 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
       {tab !== 'dashboard' && (
       <footer className="bottom-bar">
         <span>{netsStatus}</span>
+        <span>
+          {!offlineStatus.isOnline && (
+            <span style={{ color: '#ff6b6b', marginRight: 8 }} title="Offline — contacts saved locally, will sync when reconnected">
+              ⚠ Offline ({offlineStatus.stats.pendingSync} pending)
+            </span>
+          )}
+          {offlineStatus.isOnline && offlineStatus.stats.pendingSync > 0 && (
+            <span style={{ color: '#ffa500', marginRight: 8 }} title="Syncing pending contacts">
+              ↻ Syncing {offlineStatus.stats.pendingSync} contact(s)…
+            </span>
+          )}
+        </span>
         <span>{loggingState.contacts.length} local contact(s) this session</span>
       </footer>
       )}
@@ -3945,7 +3871,7 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
         <AuthGate
           baseUrl={loggingState.backendBaseUrl}
           onLoginSuccess={handleAuthLoginSuccess}
-          onSkipLogin={handleSWLLogin}
+          onSkipLogin={() => setAuthGateVisible(false)}
           existingToken={loggingState.accessToken}
           deviceType="Web"
           visible={authGateVisible}
@@ -4346,13 +4272,13 @@ function StationProfilesSection({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
-  // Auto-expand edit form for the incomplete active profile on mount
+  // Auto-expand add form only when user has no profiles at all
   useEffect(() => {
-    if (profileIncomplete && activeProfileId && !editingId && !isAdding) {
-      setEditingId(activeProfileId);
-      setIsAdding(false);
+    if (profiles.length === 0 && !editingId && !isAdding) {
+      setIsAdding(true);
+      setEditingId(null);
     }
-  }, [profileIncomplete, activeProfileId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profiles.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startEdit = (id: string) => {
     setEditingId(id);
@@ -4702,7 +4628,7 @@ const EXTERNAL_SERVICES = [
   { key: 'eqsl', label: 'eQSL.cc', description: 'eQSL logbook sync and QSL confirmation.', usernameLabel: 'eQSL Username', help: 'Use your eQSL.cc login credentials for QSL sync.' },
 ] as const;
 
-function ExternalAccountsPanel({ baseUrl, token, isLoggedIn }: { baseUrl: string; token?: string; isLoggedIn: boolean }) {
+function ExternalAccountsPanel({ baseUrl, token, isLoggedIn, isSubscriber }: { baseUrl: string; token?: string; isLoggedIn: boolean; isSubscriber: boolean }) {
   const [credentials, setCredentials] = useState<ServiceCredentialOut[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKeyOut[]>([]);
   const [showAddForm, setShowAddForm] = useState<string | null>(null);
@@ -4834,7 +4760,7 @@ function ExternalAccountsPanel({ baseUrl, token, isLoggedIn }: { baseUrl: string
     setStatus('');
     try {
       await saveApiKey(baseUrl, token, 'qrz', inputQrzKey.trim(), 'QRZ XML Lookup API');
-      setInputQrzKey('');
+      resetForm();
       setStatus('QRZ API key saved.');
       void fetchAll();
     } catch (err) {
@@ -4890,6 +4816,30 @@ function ExternalAccountsPanel({ baseUrl, token, isLoggedIn }: { baseUrl: string
       <div className="panel service-table-panel">
         <h3>External Accounts</h3>
         <p className="account-storage-warning">Log in to configure LoTW, QRZ, and eQSL accounts.</p>
+      </div>
+    );
+  }
+
+  if (!isSubscriber) {
+    return (
+      <div className="panel service-table-panel">
+        <div className="panel-heading">
+          <div>
+            <h3>External Accounts</h3>
+            <p>LoTW, QRZ.com, and eQSL.cc credentials for QSO sync and confirmation.</p>
+          </div>
+        </div>
+        <div style={{ padding: '20px 16px', background: '#2a1a0a', borderRadius: 6, textAlign: 'center' }}>
+          <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: '#ffcc00' }}>
+            &#x1F512; Subscription Required
+          </div>
+          <p style={{ color: '#ccccaa', marginBottom: 12 }}>
+            External account integration (LoTW, QRZ.com, eQSL.cc) is available with a paid Log2Go subscription.
+          </p>
+          <p style={{ color: '#8899aa', fontSize: 14 }}>
+            Scroll down to the <strong>Subscription &amp; Billing</strong> section to subscribe and unlock all features.
+          </p>
+        </div>
       </div>
     );
   }
@@ -5078,7 +5028,163 @@ function ExternalAccountsPanel({ baseUrl, token, isLoggedIn }: { baseUrl: string
     </div>
   );
 }
-function SettingsTab({
+function SubscriptionPanel({
+  backendBaseUrl,
+  accessToken,
+  isLoggedIn,
+}: {
+  backendBaseUrl: string;
+  accessToken: string | null | undefined;
+  isLoggedIn: boolean;
+}) {
+  const [prices, setPrices] = useState<SubscriptionPrice[]>([]);
+  const [publishableKey, setPublishableKey] = useState('');
+  const [subStatus, setSubStatus] = useState<SubscriptionStatus | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getSubscriptionPrices(backendBaseUrl)
+      .then((data) => {
+        setPrices(data.prices);
+        setPublishableKey(data.publishable_key);
+      })
+      .catch(() => setError('Could not load pricing information.'));
+  }, [backendBaseUrl]);
+
+  useEffect(() => {
+    if (!isLoggedIn || !accessToken) return;
+    getSubscriptionStatus(backendBaseUrl, accessToken)
+      .then(setSubStatus)
+      .catch(() => { });
+  }, [backendBaseUrl, accessToken, isLoggedIn]);
+
+  const handleSubscribe = async (priceId: string) => {
+    if (!accessToken) return;
+    setLoading(true);
+    setError('');
+    try {
+      const successUrl = window.location.origin + '/?checkout=success';
+      const cancelUrl = window.location.origin + '/?checkout=canceled';
+      const { url } = await createCheckoutSession(backendBaseUrl, accessToken, priceId, successUrl, cancelUrl);
+      window.location.href = url;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to start checkout.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleManage = async () => {
+    if (!accessToken) return;
+    setLoading(true);
+    setError('');
+    try {
+      const { url } = await createPortalSession(backendBaseUrl, accessToken);
+      window.location.href = url;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to open billing portal.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatExpiry = (isoDate: string | null) => {
+    if (!isoDate) return '';
+    try {
+      return new Date(isoDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    } catch {
+      return isoDate;
+    }
+  };
+
+  const statusLabel = (() => {
+    if (!subStatus) return 'Free';
+    if (subStatus.subscription_status === 'lifetime_free') return 'Lifetime Free';
+    if (subStatus.subscription_status === 'active') return subStatus.plan_name || 'Active';
+    if (subStatus.subscription_status === 'none') return 'No Subscription';
+    if (subStatus.subscription_status === 'inactive' || subStatus.subscription_status === 'canceled') return 'Expired';
+    return subStatus.subscription_status;
+  })();
+
+  const isActive = subStatus?.subscription_status === 'active';
+  const isFree = !subStatus || subStatus.subscription_status === 'none' || subStatus.subscription_status === 'lifetime_free' || subStatus.subscription_status === 'inactive';
+
+  return (
+    <div className="panel subscription-panel">
+      <div className="panel-heading">
+        <div><h3>Subscription & Billing</h3></div>
+        <span className={'account-status ' + (isActive ? 'logged-in' : '')}>
+          {statusLabel}
+        </span>
+      </div>
+
+      {subStatus?.subscription_status === 'lifetime_free' && (
+        <div style={{ padding: '12px 16px', background: '#1a3a1a', borderRadius: 6, marginBottom: 12 }}>
+          Your account has <strong>Lifetime Free</strong> access. No subscription needed.
+        </div>
+      )}
+
+      {isActive && subStatus?.current_period_end && (
+        <div style={{ padding: '12px 16px', background: '#1a2a3a', borderRadius: 6, marginBottom: 12 }}>
+          <div><strong>{subStatus.plan_name}</strong> plan active</div>
+          <div style={{ fontSize: 13, color: '#8899aa' }}>
+            Renews {formatExpiry(subStatus.current_period_end)}
+          </div>
+          <button
+            className="small-button"
+            style={{ marginTop: 8 }}
+            onClick={() => void handleManage()}
+            disabled={loading}
+          >
+            {loading ? 'Loading...' : 'Manage Billing'}
+          </button>
+        </div>
+      )}
+
+      {isFree && subStatus?.subscription_status !== 'lifetime_free' && (
+        <div className="subscription-plans">
+          {prices.length > 0 ? (
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              {prices.map((plan) => (
+                <div key={plan.price_id} style={{
+                  flex: '1 1 200px',
+                  maxWidth: 280,
+                  background: '#1a2a3a',
+                  borderRadius: 8,
+                  padding: '20px 16px',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>{plan.display_name}</div>
+                  <div style={{ fontSize: 32, fontWeight: 700, marginBottom: 4 }}>{plan.display_price}</div>
+                  <div style={{ fontSize: 13, color: '#8899aa', marginBottom: 16 }}>
+                    per {plan.interval === 'month' ? 'month' : 'year'}
+                  </div>
+                  {isLoggedIn ? (
+                    <button
+                      className="primary"
+                      onClick={() => void handleSubscribe(plan.price_id)}
+                      disabled={loading}
+                      style={{ width: '100%' }}
+                    >
+                      {loading ? 'Loading...' : 'Subscribe'}
+                    </button>
+                  ) : (
+                    <div style={{ fontSize: 13, color: '#8899aa' }}>Log in to subscribe</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: '#8899aa' }}>{error || 'Loading plans...'}</p>
+          )}
+        </div>
+      )}
+
+      {error && <div className="auth-gate-error" style={{ marginTop: 8 }}>{error}</div>}
+    </div>
+  );
+}function SettingsTab({
   loggingState,
   accountProfile,
   busy,
@@ -5114,6 +5220,17 @@ function SettingsTab({
   const [confirmPw, setConfirmPw] = useState('');
   const [pwError, setPwError] = useState('');
   const [pwBusy, setPwBusy] = useState(false);
+
+  // Subscription gate — determines if user can access external accounts
+  const [subStatus, setSubStatus] = useState<SubscriptionStatus | null>(null);
+  const isSubscriber = subStatus?.subscription_status === "active" || subStatus?.subscription_status === "lifetime_free";
+
+  useEffect(() => {
+    if (!isLoggedIn || !loggingState.accessToken) return;
+    getSubscriptionStatus(loggingState.backendBaseUrl, loggingState.accessToken)
+      .then(setSubStatus)
+      .catch(() => {});
+  }, [loggingState.backendBaseUrl, loggingState.accessToken, isLoggedIn]);
 
   const handleChangePassword = async () => {
     setPwError('');
@@ -5237,6 +5354,12 @@ function SettingsTab({
         baseUrl={loggingState.backendBaseUrl}
         token={loggingState.accessToken}
         isLoggedIn={isLoggedIn}
+        isSubscriber={isSubscriber}
+      />
+      <SubscriptionPanel
+        backendBaseUrl={loggingState.backendBaseUrl}
+        accessToken={loggingState.accessToken}
+        isLoggedIn={isLoggedIn}
       />
 
       {showChangePassword && (
@@ -5302,17 +5425,23 @@ function LogbookTab({
   accountProfile,
   busy,
   setStatus,
+  subStatus,
 }: {
   loggingState: LoggingFlowState;
   accountProfile?: AccountProfile;
   busy: boolean;
   setStatus: (msg: string) => void;
+  subStatus?: SubscriptionStatus | null;
 }) {
   const [qsoList, setQsoList] = useState<BackendQso[]>([]);
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [showSubModal, setShowSubModal] = useState(false);
   const [sortKey, setSortKey] = useState<'qso_date' | 'call' | 'mode' | 'band'>('qso_date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const isLoggedIn = Boolean(loggingState.accessToken);
+  const isPaid = subStatus?.subscription_status === 'active' || subStatus?.subscription_status === 'lifetime_free';
+  const adifInputRef = useRef<HTMLInputElement>(null);
 
   const fetchLogbook = useCallback(async () => {
     if (!isLoggedIn) return;
@@ -5353,6 +5482,42 @@ function LogbookTab({
       setLoading(false);
     }
   }, [isLoggedIn, loggingState.backendBaseUrl, loggingState.accessToken, setStatus]);
+
+  const handleSyncServices = useCallback(async () => {
+    if (!isLoggedIn) return;
+    if (!isPaid) { setShowSubModal(true); return; }
+    setSyncing(true);
+    try {
+      const report = await uploadToServices(loggingState.backendBaseUrl!, loggingState.accessToken!);
+      const parts: string[] = [];
+      if (report.total_uploaded > 0) parts.push('Uploaded ' + report.total_uploaded);
+      if (report.total_confirmed > 0) parts.push('Confirmed ' + report.total_confirmed);
+      if (report.errors.length > 0) parts.push('Errors: ' + report.errors.join(', '));
+      if (parts.length === 0) parts.push('No new QSOs to sync.');
+      setStatus('Sync complete. ' + parts.join(' · '));
+      void fetchLogbook();
+    } catch (error) {
+      setStatus('Sync failed: ' + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setSyncing(false);
+    }
+  }, [isLoggedIn, isPaid, loggingState.backendBaseUrl, loggingState.accessToken, setStatus, fetchLogbook]);
+
+  const handleAdifImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLoading(true);
+    try {
+      const result = await importAdif(loggingState.backendBaseUrl!, loggingState.accessToken!, file);
+      setStatus('ADIF import: ' + result.imported + ' imported, ' + result.skipped + ' skipped' + (result.errors.length ? ', errors: ' + result.errors.join(', ') : ''));
+      void fetchLogbook();
+    } catch (error) {
+      setStatus('ADIF import failed: ' + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setLoading(false);
+      if (adifInputRef.current) adifInputRef.current.value = '';
+    }
+  }, [loggingState.backendBaseUrl, loggingState.accessToken, setStatus, fetchLogbook]);
 
   const sortedQsos = useMemo(() => {
     const sorted = [...qsoList].sort((a, b) => {
@@ -5403,8 +5568,11 @@ function LogbookTab({
             <p>All QSOs stored for {accountProfile?.callsign || loggingState.username}. Includes Log2Go-created contacts and imported external-service QSOs.</p>
           </div>
           <div className="logbook-actions">
-            <button onClick={() => void fetchLogbook()} disabled={loading || busy}>Refresh</button>
+            <button onClick={() => void fetchLogbook()} disabled={loading || syncing || busy}>Refresh</button>
+            <button onClick={() => void handleSyncServices()} disabled={loading || syncing || busy}>🔄 Sync Services</button>
             <button className="primary" onClick={() => void handleExportAdif()} disabled={loading || busy}>Export ADIF</button>
+            <button onClick={() => adifInputRef.current?.click()} disabled={loading || busy}>📥 Import ADIF</button>
+            <input ref={adifInputRef} type="file" accept=".adi,.adif" style={{ display: 'none' }} onChange={(e) => void handleAdifImport(e)} />
           </div>
         </div>
         <div className="logbook-stats">
@@ -5474,6 +5642,19 @@ function LogbookTab({
           <b className="source-external">Ext</b> = Imported from external service
         </p>
       </div>
+      {showSubModal && (
+        <div className="modal-backdrop" onClick={() => setShowSubModal(false)}>
+          <div className="modal-content" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ color: '#00b4ff', marginTop: 0 }}>Subscription Required</h2>
+            <p style={{ color: '#b0c4d8' }}>Online service sync (LoTW, QRZ.com, eQSL) requires an active Log2Go subscription.</p>
+            <p style={{ color: '#8fa8c4', fontSize: 13 }}>ADIF import and export are free for all users. Subscribe to sync QSOs with online services automatically.</p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button className="primary" onClick={() => { setShowSubModal(false); /* Could navigate to settings */ }}>Go to Settings</button>
+              <button onClick={() => setShowSubModal(false)} style={{ background: '#1b3a5c', color: '#b0c4d8' }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
