@@ -283,40 +283,6 @@ export function setBackendSettings(
   };
 }
 
-/**
- * Validate the backend URL by making a simple test request.
- * Returns the validated URL, or falls back to the default if validation fails.
- */
-export async function validateBackendUrl(url: string): Promise<string> {
-  const defaultUrl = 'https://api.log2goapp.net';
-  
-  // If it's already the default, no need to validate
-  if (url === defaultUrl) return url;
-  
-  try {
-    // Try a simple OPTIONS request to test connectivity and SSL
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    
-    const response = await fetch(`${url.replace(/\/$/, '')}/health`, {
-      method: 'OPTIONS',
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeoutId);
-    
-    // If we got any response (even 404/405), the URL is reachable with valid SSL
-    return url;
-  } catch (error) {
-    // Validation failed (SSL error, timeout, network error, etc.)
-    // Fall back to the default URL
-    console.warn(`[Log2Go] Backend URL validation failed for "${url}":`, 
-      error instanceof Error ? error.message : String(error));
-    console.warn(`[Log2Go] Falling back to default: ${defaultUrl}`);
-    return defaultUrl;
-  }
-}
-
 export function beginSync(state: LoggingFlowState): LoggingFlowState {
   const syncingContacts = markContactsSyncing(state.contacts);
   const hasSyncingContacts = syncingContacts.some(

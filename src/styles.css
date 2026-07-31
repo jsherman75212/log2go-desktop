@@ -934,7 +934,7 @@ label.field-required-highlight {
 /* ── Dashboard Layout (3-column grid) ── */
 .dashboard-layout {
   display: grid;
-  grid-template-columns: 280px 1fr 320px;
+  grid-template-columns: 25% 50% 25%;
   height: calc(100vh - 48px);
   min-height: 0;
   overflow: hidden;

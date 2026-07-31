@@ -2,7 +2,7 @@
   "appId": "net.ke5zqv.log2go",
   "productName": "Log2Go Desktop",
   "directories": {
-    "output": "/mnt/synology/sparky/log2go-desktop-builds"
+    "output": "dist/installers"
   },
   "files": [
     "dist-electron/**/*",

@@ -540,11 +540,15 @@ function assertLegacySuccess(text: string, action: string): LegacyNetLoggerResul
 }
 
 function joinUrl(baseUrl: string, path: string): string {
-  // Same-origin proxy rewrite only for web preview (see backendClient.ts).
-  // Electron (file:// origin) always hits the API directly.
+  // When running in the web preview server (localhost:54337), rewrite the
+  // public API URL to use the same-origin /log2go-api/ proxy so the browser
+  // doesn't hit CORS issues. In Electron (file:// origin) and in production
+  // (log2goapp.net), hit the API URL directly.
   if (typeof window !== 'undefined' && baseUrl.includes('api.log2goapp.net')) {
     const origin = window.location.origin;
     const isFileOrigin = origin.startsWith('file://');
+    // Electron loads via file:// — it should hit the API directly (no proxy).
+    // Only the web preview server on localhost:54337 has a /log2go-api/ proxy.
     const isWebPreview = !isFileOrigin && (origin.includes('localhost:54337') || origin.includes('127.0.0.1:54337'));
     if (isWebPreview) {
       return `/log2go-api${path}`;

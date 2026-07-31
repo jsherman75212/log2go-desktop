@@ -1,4 +1,4 @@
-import { setBackendSettings, type LoggingFlowState } from './loggingFlow';
+import { setBackendSettings, createInitialLoggingFlowState, type LoggingFlowState } from './loggingFlow';
 import type { AccountProfile, LoginTokenResponse } from '../services/backendClient';
 
 export type DesktopAccountSessionServices = {
@@ -52,9 +52,16 @@ export async function logInDesktopAccount(
   };
 }
 
+/**
+ * Reset to a completely fresh state on logout.
+ * Keeps the backend URL (server config) but clears all user-specific data:
+ * username, password, access token, station profiles, contacts, session, etc.
+ */
 export function logOutDesktopAccount(state: LoggingFlowState): LoggingFlowState {
+  const fresh = createInitialLoggingFlowState();
+  // Preserve only the server URL — that's config, not user data
   return {
-    ...setBackendSettings(state, { password: '' }),
-    accessToken: undefined,
+    ...fresh,
+    backendBaseUrl: state.backendBaseUrl || fresh.backendBaseUrl,
   };
 }
