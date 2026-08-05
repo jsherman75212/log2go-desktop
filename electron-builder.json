@@ -12,7 +12,12 @@
   ],
   "win": {
     "target": [
-      { "target": "nsis", "arch": ["x64"] }
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
     ]
   },
   "nsis": {
@@ -23,11 +28,22 @@
   },
   "linux": {
     "target": [
-      { "target": "AppImage", "arch": ["x64"] }
+      {
+        "target": "AppImage",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "deb",
+        "arch": [
+          "x64"
+        ]
+      }
     ],
     "category": "HamRadio",
     "maintainer": "support@ke5zqv.net",
-    "description": "Log2Go Desktop — Amateur radio logging with offline mode"
+    "description": "Log2Go Desktop \u2014 Amateur radio logging with offline mode"
   },
   "npmRebuild": false,
   "nodeGypRebuild": false
