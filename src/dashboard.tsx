@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getDXSpots, getCallsignLocations, type DXSpot } from './services/backendClient';
 
-// ── Station fallback (used before account profile loads) ──
-const DEFAULT_STATION = { lat: 32.9178, lng: -97.7444, callsign: '', grid: '' };
+// ── Station fallback (neutral world view — never any user QTH) ──
+const DEFAULT_STATION = { lat: 20, lng: -30, callsign: '', grid: '' };  // Neutral Atlantic view - never any user QTH
 
 interface DashboardContact {
   call: string;
@@ -96,6 +96,7 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
       grid,
     };
   })();
+  const hasUserGrid = !!(stationGrid && stationGrid.trim().length >= 4);
 
   const SOLAR_WAVELENGTHS: { id: string; name: string; desc: string }[] = [
     { id: '0193', name: 'AIA 193Å', desc: 'Corona' },
@@ -274,7 +275,7 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
       const uniqueCountries = new Set<string>();
 
       // Station ring (pulsing ring at home QTH)
-      rings.push({ lat: STATION.lat, lng: STATION.lng, color: '#00b4ff', maxRadius: 3, propagationSpeed: 1, repeatPeriod: 2000 });
+      if (STATION.grid) { rings.push({ lat: STATION.lat, lng: STATION.lng, color: '#00b4ff', maxRadius: 3, propagationSpeed: 1, repeatPeriod: 2000 }); }
 
       displayedContacts.forEach(c => {
         const pos = gridToLatLng(c.grid);
@@ -316,7 +317,8 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
         }
       });
 
-      const stationPts = [{ lat: STATION.lat, lng: STATION.lng, label: `${STATION.callsign} · ${STATION.grid} · Home`, color: '#00b4ff', size: 0.6 }];
+      const stationLabel = STATION.grid ? `${STATION.callsign} · ${STATION.grid} · Home` : (STATION.callsign ? `${STATION.callsign} · Set grid in Settings` : 'Set your grid in Settings');
+      const stationPts = [{ lat: STATION.lat, lng: STATION.lng, label: stationLabel, color: '#00b4ff', size: 0.6 }];
 
       globe = G()
         .globeImageUrl('/dashboard/img/globe/globe_level0_8192x4096.jpg')
@@ -376,7 +378,8 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
       }
       resizeGlobe();
       window.addEventListener('resize', resizeGlobe);
-      globe.pointOfView({ lat: STATION.lat, lng: STATION.lng, altitude: 3.5 }, 0);
+      const initialAlt = hasUserGrid ? 3.5 : 4;
+      globe.pointOfView({ lat: STATION.lat, lng: STATION.lng, altitude: initialAlt }, 0);
       globeObjRef.current = globe;
     }
 
@@ -424,9 +427,9 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
       <div className="dashboard-sidebar">
         <div className="dashboard-panel">
           <div className="dashboard-panel-title">📍 Station</div>
-          <div className="dashboard-callsign">{STATION.callsign}</div>
-          <div className="dashboard-grid">{STATION.grid}</div>
-          <div className="dashboard-coords">{STATION.lat.toFixed(4)}° N, {Math.abs(STATION.lng).toFixed(4)}° {STATION.lng < 0 ? 'W' : 'E'}</div>
+          <div className="dashboard-callsign">{STATION.callsign || 'Log2Go'}</div>
+          <div className="dashboard-grid">{STATION.grid || 'Set grid in Settings'}</div>
+          <div className="dashboard-coords">{STATION.grid ? `${STATION.lat.toFixed(4)}° N, ${Math.abs(STATION.lng).toFixed(4)}° ${STATION.lng < 0 ? 'W' : 'E'}` : 'Configure your station'}</div>
         </div>
 
         <div className="dashboard-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
@@ -534,7 +537,7 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
         <div className="globe-controls">
           <div className={`globe-btn${globeView === 'day' ? ' active' : ''}`} onClick={() => setGlobeView('day')}>🗺️ Map</div>
           <div className={`globe-btn${globeView === 'night' ? ' active' : ''}`} onClick={() => setGlobeView('night')}>🔍 Detail</div>
-          <div className="globe-btn" onClick={() => globeObjRef.current?.pointOfView?.({ lat: STATION.lat, lng: STATION.lng, altitude: 3.5 }, 1000)}>🏠 Home</div>
+          <div className="globe-btn" onClick={() => globeObjRef.current?.pointOfView?.({ lat: STATION.lat, lng: STATION.lng, altitude: hasUserGrid ? 3.5 : 4 }, 1000)}>🏠 Home</div>
         </div>
         <div className="globe-stats">
           <b>{displayedContacts.length}</b> QSOs mapped · <b>{uniqueGrids.size}</b> grids · <b>{uniqueCountries.size}</b> country

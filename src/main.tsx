@@ -113,6 +113,7 @@ import type {
 import { getActiveProfile } from './domain/stationProfiles';
 import type { Contact, StationProfile, StationProfileCollection, MobilePortableStatus } from './domain/models';
 import { AuthGate } from './application/authGate';
+// Desktop-only imports
 import { MatrixClock } from './application/matrixClock';
 import { useOfflineStatus, type OfflineStatus } from './application/useOfflineStatus';
 import { offlineDb } from './services/offlineDb';
@@ -2722,7 +2723,7 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
       </div>
 
       {tab === 'dashboard' ? (
-        <DashboardTab accessToken={loggingState.accessToken} backendBaseUrl={loggingState.backendBaseUrl} />
+        <DashboardTab accessToken={loggingState.accessToken} backendBaseUrl={loggingState.backendBaseUrl} accountProfile={accountProfile} stationGrid={loggingState.stationProfile.homeGrid} />
       ) : tab === 'netlogger' ? (
         <>
         {viewingHistory ? (
