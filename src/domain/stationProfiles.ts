@@ -22,6 +22,7 @@ export type CreateProfileInput = {
   defaultMode?: string;
   defaultSignalReport?: SignalReport;
   autoGps?: boolean;
+  locationOverride?: boolean;
 };
 
 export type UpdateProfileInput = Partial<CreateProfileInput>;
@@ -52,6 +53,7 @@ export function createStationProfile(
     defaultMode: input.defaultMode?.trim() || 'FM',
     defaultSignalReport: input.defaultSignalReport ?? { sent: '59', received: '59' },
     autoGps: input.autoGps ?? false,
+    locationOverride: input.locationOverride ?? false,
     active: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -138,6 +140,9 @@ export function updateProfile(
         }),
         ...(input.autoGps !== undefined && {
           autoGps: input.autoGps,
+        }),
+        ...(input.locationOverride !== undefined && {
+          locationOverride: input.locationOverride,
         }),
         updatedAt: new Date().toISOString(),
       };
