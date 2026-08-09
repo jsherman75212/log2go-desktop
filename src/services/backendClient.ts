@@ -665,13 +665,14 @@ async function request(
 }
 
 function joinUrl(baseUrl: string, path: string): string {
+  // When running in a local dev/preview server (localhost or LAN IP),
+  // rewrite the public API URL to use the same-origin /log2go-api/ proxy.
+  // In production (log2goapp.net), hit the API URL directly — NPM
+  // proxies api.log2goapp.net to the backend server.
   if (typeof window !== 'undefined' && baseUrl.includes('api.log2goapp.net')) {
     const origin = window.location.origin;
-    // Electron (file:// origin) hits the API directly — no proxy needed
-    const isFileOrigin = origin.startsWith('file://');
-    // Local dev/preview server rewrites to same-origin /log2go-api/ proxy
-    const isWebPreview = !isFileOrigin && (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes(':54337'));
-    if (isWebPreview) {
+    const isLocalDev = origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes(':54337');
+    if (isLocalDev) {
       return `/log2go-api${path}`;
     }
   }
