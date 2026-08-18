@@ -51,6 +51,7 @@ import { logInDesktopAccount, logOutDesktopAccount } from './application/desktop
 import { logWebContact } from './application/webLogging';
 import { loadPersistentLoggingState, savePersistentLoggingState } from './application/persistence';
 import { APP_VERSION } from './appVersion';
+import { FeedbackModal } from './components/FeedbackModal';
 import { createDesktopPersistenceStores } from './services/browserKeyValueStore';
 import {
   createContact,
@@ -395,6 +396,14 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
+
+  // ── Feedback menu listener (desktop) ──
+  useEffect(() => {
+    const desktop = (window as unknown as { log2goDesktop?: { feedback?: { onOpen: (cb: () => void) => (() => void) } } }).log2goDesktop;
+    if (!desktop?.feedback?.onOpen) return;
+    const cleanup = desktop.feedback.onOpen(() => setFeedbackOpen(true));
+    return cleanup;
+  }, []);
   const [loggingState, setLoggingState] = useState<LoggingFlowState>(() => createInitialLoggingFlowState());
   const [persistenceReady, setPersistenceReady] = useState(false);
   const [activeNets, setActiveNets] = useState<FlatActiveNet[]>([]);
@@ -427,6 +436,7 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
   const showCommsPanel = showAim || showMonitors;
   const [aimDraft, setAimDraft] = useState('');
   const [aimJoined, setAimJoined] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   /** Roster-only monitoring for NetLogger nets (no AIM/monitors/subscribe). */
   const [monitoringRosterOnly, setMonitoringRosterOnly] = useState(false);
   /** Past (closed/historical) nets fetched from the Log2Go backend. */

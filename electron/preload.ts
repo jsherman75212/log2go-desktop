@@ -61,6 +61,14 @@ const api = {
   stats: () => ipcRenderer.invoke('db:stats'),
   // ── Online/Offline detection ──────────────────────────────────
   isOnline: () => navigator.onLine,
+  // ── Feedback ─────────────────────────────────────────────────
+  feedback: {
+    onOpen: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on('app:openFeedback', handler);
+      return () => ipcRenderer.off('app:openFeedback', handler);
+    },
+  },
   // ── App version ─────────────────────────────────────────────────
   appVersion: app.getVersion(),
 };

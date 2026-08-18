@@ -97,6 +97,13 @@ function showUpdateError(message: string) {
   });
 }
 
+
+function openFeedback() {
+  const win = mainWindow ?? BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  if (win) {
+    win.webContents.send('app:openFeedback');
+  }
+}
 function checkForUpdatesInteractive() {
   manualUpdateCheck = true;
   autoUpdater
@@ -167,6 +174,13 @@ function buildMenu() {
     },
   };
 
+  const feedbackItem: Electron.MenuItemConstructorOptions = {
+    label: 'Send Feedback',
+    click: () => {
+      openFeedback();
+    },
+  };
+
   if (process.platform === 'darwin') {
     const template: Electron.MenuItemConstructorOptions[] = [
       {
@@ -203,7 +217,7 @@ function buildMenu() {
       { role: 'windowMenu' },
       {
         label: 'Help',
-        submenu: [aboutItem, { type: 'separator' }, checkForUpdatesItem],
+        submenu: [aboutItem, { type: 'separator' }, checkForUpdatesItem, { type: 'separator' }, feedbackItem],
       },
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
