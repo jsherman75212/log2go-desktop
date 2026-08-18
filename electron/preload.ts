@@ -9,7 +9,7 @@
  * its localStorage store.
  */
 
-import { contextBridge, ipcRenderer } from 'electron';
+import { app, contextBridge, ipcRenderer } from 'electron';
 
 /** Wrap an IPC invoke so it rejects with a clear error on failure. */
 function safeInvoke(channel: string, ...args: unknown[]) {
@@ -61,6 +61,8 @@ const api = {
   stats: () => ipcRenderer.invoke('db:stats'),
   // ── Online/Offline detection ──────────────────────────────────
   isOnline: () => navigator.onLine,
+  // ── App version ─────────────────────────────────────────────────
+  appVersion: app.getVersion(),
 };
 
 contextBridge.exposeInMainWorld('log2goDesktop', api);

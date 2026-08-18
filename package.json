@@ -1,6 +1,6 @@
 {
   "name": "log2go-desktop",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Log2Go Desktop - NetLogger-style amateur radio logging client",
   "main": "dist-electron/main.js",
@@ -25,7 +25,8 @@
     "tsx": "^4.22.4",
     "typescript": "~5.9.2",
     "vite": "latest",
-    "wait-on": "latest"
+    "wait-on": "latest",
+    "electron-updater": "^6.6.4"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",

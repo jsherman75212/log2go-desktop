@@ -74,7 +74,7 @@ export type OfflineStats = {
 
 // ── Bridge detection ─────────────────────────────────────────────────
 
-type DesktopBridge = {
+export type DesktopBridge = {
   contacts: {
     insert: (c: Record<string, unknown>) => Promise<{ local_id: string }>;
     list: () => Promise<Record<string, unknown>[]>;
@@ -109,6 +109,8 @@ type DesktopBridge = {
   };
   stats: () => Promise<OfflineStats>;
   isOnline: () => boolean;
+  /** Current desktop app version (from package.json). */
+  appVersion: string;
 };
 
 function getBridge(): DesktopBridge | null {

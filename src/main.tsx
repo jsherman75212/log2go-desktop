@@ -50,6 +50,7 @@ import type { LoggingFlowState } from './application/loggingFlow';
 import { logInDesktopAccount, logOutDesktopAccount } from './application/desktopAccountSession';
 import { logWebContact } from './application/webLogging';
 import { loadPersistentLoggingState, savePersistentLoggingState } from './application/persistence';
+import { APP_VERSION } from './appVersion';
 import { createDesktopPersistenceStores } from './services/browserKeyValueStore';
 import {
   createContact,
@@ -115,7 +116,7 @@ import type { Contact, StationProfile, StationProfileCollection, MobilePortableS
 import { AuthGate } from './application/authGate';
 import { MatrixClock } from './application/matrixClock';
 import { useOfflineStatus, type OfflineStatus } from './application/useOfflineStatus';
-import { offlineDb } from './services/offlineDb';
+import { offlineDb, type DesktopBridge } from './services/offlineDb';
 import { setBackendSettings } from './application/loggingFlow';
 import './styles.css';
 
@@ -5213,6 +5214,13 @@ function SubscriptionPanel({
   const isLoggedIn = Boolean(loggingState.accessToken);
   const loginReady = Boolean(loggingState.backendBaseUrl.trim() && loggingState.username.trim() && loggingState.password);
 
+  // Desktop app version surfaced in Settings
+  const desktopVersion =
+    (typeof window !== 'undefined' &&
+      'log2goDesktop' in window &&
+      (window as unknown as { log2goDesktop: DesktopBridge }).log2goDesktop?.appVersion) ??
+    APP_VERSION;
+
   // Change password state
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [currentPw, setCurrentPw] = useState('');
@@ -5265,6 +5273,7 @@ function SubscriptionPanel({
       <div className="panel settings-hero settings-combined-hero">
         <div className="settings-hero-block settings-title-block">
           <h2>Settings / Accounts</h2>
+          <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', marginTop: '0.25rem' }}>Log2Go Desktop v{desktopVersion}</span>
           <div className="profile-summary-card">
             <span>Active station profile</span>
             <b>{activeProfile.callsign || 'No callsign set'}</b>
