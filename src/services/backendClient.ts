@@ -589,6 +589,31 @@ export async function createPortalSession(
   });
 }
 
+export type FeedbackRequest = {
+  category: string;
+  message: string;
+  email?: string | null;
+  app_version?: string | null;
+  platform?: string | null;
+};
+
+export type FeedbackResponse = {
+  ok: boolean;
+  message: string;
+};
+
+export async function submitFeedback(
+  baseUrl: string,
+  token: string,
+  payload: FeedbackRequest,
+): Promise<FeedbackResponse> {
+  return requestJson<FeedbackResponse>(baseUrl, '/api/feedback', {
+    method: 'POST',
+    token,
+    body: JSON.stringify(payload),
+  });
+}
+
 type ApiRequestOptions = {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   token?: string;

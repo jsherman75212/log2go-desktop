@@ -1858,3 +1858,51 @@ label.field-required-highlight {
     min-height: 44px;
   }
 }
+
+/* Feedback form styles */
+.feedback-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.feedback-category-chip {
+  background: #0f151b;
+  border: 1px solid #2a3540;
+  border-radius: 8px;
+  color: #f3f7f5;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+.feedback-category-chip.selected {
+  background: #00b4ff;
+  border-color: #00b4ff;
+  color: #ffffff;
+}
+.feedback-category-chip:disabled {
+  opacity: 0.6;
+}
+.modal-content textarea {
+  background: #0f151b;
+  border: 1px solid #2a3540;
+  border-radius: 8px;
+  color: #f3f7f5;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px;
+  resize: vertical;
+  width: 100%;
+}
+.feedback-status {
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+.feedback-status.success {
+  color: #00b4ff;
+}
+.feedback-status.error {
+  color: #c24136;
+}
