@@ -52,6 +52,29 @@ function gridToLatLng(grid: string | null): { lat: number; lng: number } | null 
   return { lat, lng: lon };
 }
 
+// ── Bounding box centroid for GeoJSON polygon features ──
+function getCentroid(feature: any): { lat: number; lng: number } | null {
+  const geom = feature?.geometry;
+  if (!geom) return null;
+  const coords: number[][][] = geom.type === 'Polygon'
+    ? [geom.coordinates[0]]
+    : geom.type === 'MultiPolygon'
+    ? geom.coordinates.map((p: number[][][]) => p[0])
+    : [];
+  if (coords.length === 0) return null;
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  coords.forEach(ring => {
+    ring.forEach(([lng, lat]) => {
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    });
+  });
+  if (!isFinite(minLat)) return null;
+  return { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 };
+}
+
 // ── Band conditions ──
 const BANDS = [
   { name: '160m', freq: 1.8 }, { name: '80m', freq: 3.5 }, { name: '40m', freq: 7 },
@@ -322,7 +345,7 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
 
       globe = G()
         .globeImageUrl('https://log2goapp.net/dashboard/img/globe/globe_level0_8192x4096.jpg')
-        .bumpImageUrl('/dashboard/img/earth-topology.png')
+        .bumpImageUrl('https://log2goapp.net/dashboard/img/earth-topology.png')
         .showAtmosphere(true)
         .atmosphereColor('#00b4ff')
         .atmosphereAltitude(0.15)
@@ -337,6 +360,19 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
         .arcAltitude(0.12)
         .arcCurveResolution(64)
         .pointsMerge(false)
+        // ── US/Canada state & province boundaries + labels ──
+        .polygonsData([])
+        .polygonCapColor(() => 'rgba(0, 180, 255, 0.03)')
+        .polygonSideColor(() => 'rgba(0, 180, 255, 0.15)')
+        .polygonStrokeColor(() => 'rgba(0, 180, 255, 0.4)')
+        .polygonAltitude(0.001)
+        .labelsData([])
+        .labelLat('lat')
+        .labelLng('lng')
+        .labelText('text')
+        .labelSize(0.3)
+        .labelColor(() => 'rgba(180, 200, 220, 0.7)')
+        .labelAltitude(0.005)
         // ── OpenHamClock-style colored tags on the globe ──
         .htmlElementsData(htmlEls)
         .htmlLat('lat')
@@ -381,6 +417,26 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
       const initialAlt = hasUserGrid ? 3.5 : 4;
       globe.pointOfView({ lat: STATION.lat, lng: STATION.lng, altitude: initialAlt }, 0);
       globeObjRef.current = globe;
+
+      // Load US/Canada state outlines and labels asynchronously (don't block globe render)
+      (async () => {
+        try {
+          const res = await fetch('https://log2goapp.net/dashboard/data/us-canada-states.geojson');
+          if (!res.ok) return;
+          const geojson = await res.json();
+          const features = Array.isArray(geojson?.features) ? geojson.features : [];
+          const stateLabels = features
+            .map((f: any) => {
+              const centroid = getCentroid(f);
+              const text = f?.properties?.name || f?.properties?.NAME || '';
+              if (!centroid || !text) return null;
+              return { lat: centroid.lat, lng: centroid.lng, text };
+            })
+            .filter(Boolean);
+          globe.polygonsData(features);
+          globe.labelsData(stateLabels);
+        } catch { /* ignore state geojson failures */ }
+      })();
     }
 
     // Load globe.gl script if not already loaded
@@ -409,7 +465,7 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
     if (!g) return;
     if (globeView === 'day') {
       g.globeImageUrl('https://log2goapp.net/dashboard/img/globe/globe_level0_8192x4096.jpg');
-      g.bumpImageUrl('/dashboard/img/earth-topology.png');
+      g.bumpImageUrl('https://log2goapp.net/dashboard/img/earth-topology.png');
       g.showAtmosphere(true);
     } else {
       g.globeImageUrl('/dashboard/img/globe/globe_level1_16384x8192.jpg');
