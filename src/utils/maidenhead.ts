@@ -127,3 +127,40 @@ function takeIndex(value: number, size: number): { index: number; remainder: num
     remainder: value - index * size,
   };
 }
+
+/**
+ * Forward-geocode a location string (city, state, country) to approximate coordinates
+ * using Nominatim (OpenStreetMap). Returns null if geocoding fails.
+ * Rate-limited to 1 request/second per Nominatim policy.
+ */
+export async function geocodeLocation(params: {
+  city?: string;
+  state?: string;
+  country?: string;
+  county?: string;
+}): Promise<Coordinates | null> {
+  const parts: string[] = [];
+  if (params.city) parts.push(params.city);
+  if (params.county) parts.push(params.county);
+  if (params.state) parts.push(params.state);
+  if (params.country) parts.push(params.country);
+  const query = parts.join(', ').trim();
+  if (!query) return null;
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
+    const resp = await fetch(url, {
+      headers: { 'Accept-Language': 'en' },
+    });
+    const data = await resp.json();
+    if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
+      return {
+        latitude: parseFloat(data[0].lat),
+        longitude: parseFloat(data[0].lon),
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}

@@ -204,6 +204,36 @@ export async function exportAdif(baseUrl: string, token: string): Promise<string
   return response.text();
 }
 
+export type AdifImportResult = {
+  total_parsed: number;
+  imported: number;
+  skipped: number;
+  errors: string[];
+};
+
+export async function importAdif(
+  baseUrl: string,
+  token: string,
+  file: File,
+): Promise<AdifImportResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  // Do NOT set Content-Type — browser sets multipart/form-data with boundary
+  const response = await fetch(joinUrl(baseUrl, '/api/v1/import/adif'), {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new ApiError(response.status, text, parseJsonResponse(text));
+  }
+  const text = await response.text();
+  return parseJsonResponse(text) as AdifImportResult;
+}
+
 export async function updateContact(
   baseUrl: string,
   token: string,
@@ -660,17 +690,14 @@ async function request(
 }
 
 function joinUrl(baseUrl: string, path: string): string {
-  // When running in the web preview server (localhost:54337), rewrite the
-  // public API URL to use the same-origin /log2go-api/ proxy so the browser
-  // doesn't hit CORS issues. In Electron (file:// origin) and in production
-  // (log2goapp.net), hit the API URL directly.
+  // When running in a local dev/preview server (localhost or LAN IP),
+  // rewrite the public API URL to use the same-origin /log2go-api/ proxy.
+  // In production (log2goapp.net), hit the API URL directly — NPM
+  // proxies api.log2goapp.net to the backend server.
   if (typeof window !== 'undefined' && baseUrl.includes('api.log2goapp.net')) {
     const origin = window.location.origin;
-    const isFileOrigin = origin.startsWith('file://');
-    // Electron loads via file:// — it should hit the API directly (no proxy).
-    // Only the web preview server on localhost:54337 has a /log2go-api/ proxy.
-    const isWebPreview = !isFileOrigin && (origin.includes('localhost:54337') || origin.includes('127.0.0.1:54337'));
-    if (isWebPreview) {
+    const isLocalDev = origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes(':54337');
+    if (isLocalDev) {
       return `/log2go-api${path}`;
     }
   }
@@ -688,25 +715,7 @@ function parseJsonResponse(responseText: string): unknown {
     return responseText;
   }
 }
-export async function importAdif(
-  baseUrl: string,
-  token: string,
-  file: File,
-): Promise<{ imported: number; updated: number; skipped: number; errors: string[] }> {
-  const formData = new FormData();
-  formData.append('file', file);
-  const url = baseUrl + '/api/v1/import/adif';
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + token },
-    body: formData,
-  });
-  if (!res.ok) {
-    const detail = await res.text();
-    throw new Error('ADIF import failed: ' + detail);
-  }
-  return res.json();
-}
+
 
 
 export async function getCallsignLocations(
