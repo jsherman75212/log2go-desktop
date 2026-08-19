@@ -13,7 +13,7 @@
  * fine but AIM was silently dropped; v3.1.7W works.
  */
 
-export const APP_VERSION = '1.0.2';
+export const APP_VERSION = '1.0.3';
 
 /**
  * NetLogger identity version — must impersonate a known desktop version.
