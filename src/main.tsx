@@ -127,11 +127,13 @@ import { usePreferences, PreferencesModal, DEFAULT_PREFERENCES, type Log2GoPrefe
 import { useKeyboardShortcuts, useStationHighlighter, parseSlashCodes, type HighlighterMode } from './components/NetLoggerShortcuts';
 import { renderAimText, getAimMessageClass } from './components/AimMessageRenderer';
 import { DashboardTab } from './dashboard';
+import { DxSpotsPanel } from './components/DxSpotsPanel';
+import { draftFromDxSpot, type DXSpot } from './services/dxSpotsClient';
 
 // Desktop-only imports
 
 
-type AppTab = 'dashboard' | 'netlogger' | 'general' | 'contest' | 'logbook' | 'settings';
+type AppTab = 'dashboard' | 'netlogger' | 'general' | 'contest' | 'logbook' | 'settings' | 'dxspots';
 
 const desktopPersistenceStores = createDesktopPersistenceStores();
 const APP_TAB_KEY = 'log2go.web.activeTab.v1';
@@ -144,6 +146,41 @@ const NETLOGGER_JOINED_POLL_CYCLE_MS = 45_000;
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+type ProfileValidationResult =
+  | { ok: true }
+  | { ok: false; reason: 'no-profiles' | 'incomplete-profile'; message: string };
+
+function validateStationProfileForLogging(
+  state: LoggingFlowState,
+): ProfileValidationResult {
+  const profiles = state.profileCollection.profiles;
+  if (profiles.length === 0) {
+    return {
+      ok: false,
+      reason: 'no-profiles',
+      message: 'Create a station profile before logging contacts. Go to Settings to create one.',
+    };
+  }
+
+  const active = state.stationProfile;
+  const hasCallsign = (active.callsign?.trim().length ?? 0) > 0;
+  const hasLocation =
+    (active.homeGrid?.trim().length ?? 0) > 0 ||
+    (active.state?.trim().length ?? 0) > 0 ||
+    (active.county?.trim().length ?? 0) > 0;
+  const hasAutoGps = active.autoGps ?? false;
+
+  if (!hasCallsign || (!hasLocation && !hasAutoGps && !(active.locationOverride ?? false))) {
+    return {
+      ok: false,
+      reason: 'incomplete-profile',
+      message: 'Select a station profile with location info before logging contacts. Go to Settings to select or create one.',
+    };
+  }
+
+  return { ok: true };
 }
 
 function escapeRegex(s: string): string {
@@ -2151,6 +2188,28 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
     await persistDraftContact(draft, loggingMode);
   }, [draft, persistDraftContact]);
 
+  // ── DX Spot selected → pre-fill logging draft and open Logging tab ─────
+  const handleSelectSpot = useCallback((spot: DXSpot) => {
+    const validation = validateStationProfileForLogging(loggingState);
+    if (!validation.ok) {
+      setNetsStatus(validation.message);
+      setTab('settings');
+      return;
+    }
+
+    const { callsign, frequency, band, mode } = draftFromDxSpot(spot);
+    setDraft((current) => ({
+      ...emptyDraft,
+      callsign,
+      frequency,
+      band,
+      mode,
+      rstSent: current.rstSent || '59',
+      rstReceived: current.rstReceived || '59',
+    }));
+    setTab('general');
+  }, [loggingState]);
+
   const logContestDraft = useCallback(async () => {
     if (!contestName.trim()) {
       setNetsStatus('Pick a contest before logging a contest contact.');
@@ -2683,26 +2742,18 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
           {([
             ['dashboard', 'Dashboard'],
             ['netlogger', 'Nets'],
+            ['dxspots', 'DX Spots'],
             ['general', 'Logging'],
             ['contest', 'Contest'],
             ['logbook', 'Logbook'],
             ['settings', 'Settings'],
           ] as const).map(([id, label]) => (
             <button key={id} className={tab === id ? 'active' : ''} title={label} aria-label={label} onClick={() => {
-              const activityTabs = ['netlogger', 'general', 'contest'];
+              const activityTabs = ['netlogger', 'general', 'contest', 'dxspots'];
               if (activityTabs.includes(id)) {
-                const profiles = loggingState.profileCollection.profiles;
-                if (profiles.length === 0) {
-                  setNetsStatus('Create a station profile before logging contacts. Go to Settings to create one.');
-                  setTab('settings');
-                  return;
-                }
-                const active = loggingState.stationProfile;
-                const hasCallsign = (active.callsign?.trim().length ?? 0) > 0;
-                const hasLocation = (active.homeGrid?.trim().length ?? 0) > 0 || (active.state?.trim().length ?? 0) > 0 || (active.county?.trim().length ?? 0) > 0;
-                const hasAutoGps = active.autoGps ?? false;
-                if (!hasCallsign || (!hasLocation && !hasAutoGps && !(active.locationOverride ?? false))) {
-                  setNetsStatus('Select a station profile with location info before logging contacts. Go to Settings to select or create one.');
+                const validation = validateStationProfileForLogging(loggingState);
+                if (!validation.ok) {
+                  setNetsStatus(validation.message);
                   setTab('settings');
                   return;
                 }
@@ -2725,7 +2776,7 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
             <div className="tb-clock-time">{localTime}</div>
             <div className="tb-clock-date">{localDate}</div>
           </div>
-          <span className="tb-page-label">{tab === 'dashboard' ? 'DASHBOARD' : tab === 'netlogger' ? 'NETS' : tab === 'general' ? 'LOGGING' : tab === 'contest' ? 'CONTEST' : tab === 'logbook' ? 'LOGBOOK' : 'SETTINGS'}</span>
+          <span className="tb-page-label">{tab === 'dashboard' ? 'DASHBOARD' : tab === 'netlogger' ? 'NETS' : tab === 'dxspots' ? 'DX SPOTS' : tab === 'general' ? 'LOGGING' : tab === 'contest' ? 'CONTEST' : tab === 'logbook' ? 'LOGBOOK' : 'SETTINGS'}</span>
         </div>
         <div className="tb-divider-ext" />
         <div className="tb-right">
@@ -2749,6 +2800,12 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
 
       {tab === 'dashboard' ? (
         <DashboardTab accessToken={loggingState.accessToken} backendBaseUrl={loggingState.backendBaseUrl} accountProfile={accountProfile} stationGrid={loggingState.stationProfile.homeGrid} />
+      ) : tab === 'dxspots' ? (
+        <DxSpotsPanel
+          accessToken={loggingState.accessToken}
+          backendBaseUrl={loggingState.backendBaseUrl}
+          onSelectSpot={handleSelectSpot}
+        />
       ) : tab === 'netlogger' ? (
         <>
         {viewingHistory ? (

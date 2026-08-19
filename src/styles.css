@@ -1906,3 +1906,135 @@ label.field-required-highlight {
 .feedback-status.error {
   color: #c24136;
 }
+
+/* ── DX Spots panel ─────────────────────────────────────────────────── */
+.dx-spots-layout {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.dx-spots-panel {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.dx-spots-panel .panel-heading {
+  flex-shrink: 0;
+}
+.dx-spots-updated {
+  color: #7fa1b8;
+  font-size: 12px;
+}
+.dx-spots-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+.dx-spots-filter button {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+.dx-spots-filter button.active {
+  background: linear-gradient(180deg, #00b4ff, #006da3);
+  color: #001019;
+  border-color: #00b4ff;
+  font-weight: 800;
+}
+.dx-spots-status {
+  padding: 24px 12px;
+  text-align: center;
+  color: #9db9cc;
+  font-size: 13px;
+}
+.dx-spots-status.dx-spots-error {
+  color: #ff6b6b;
+}
+.dx-spots-status.dx-spots-empty {
+  color: #7a9bb0;
+}
+.dx-spots-loading {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(0, 180, 255, 0.3);
+  border-top-color: #00b4ff;
+  border-radius: 50%;
+  animation: dx-spin 0.8s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+@keyframes dx-spin {
+  to { transform: rotate(360deg); }
+}
+.dx-spots-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  flex: 1;
+}
+.dx-spot-row {
+  display: grid;
+  grid-template-columns: minmax(70px, auto) minmax(90px, auto) minmax(45px, auto) minmax(70px, auto) minmax(55px, auto) 1fr;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 8px 10px;
+  background: #0c1d2a;
+  border: 1px solid #24485f;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #dce9f7;
+  font-size: 13px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.dx-spot-row:hover {
+  border-color: #00b4ff;
+  box-shadow: 0 0 0 1px #00b4ff inset;
+}
+.dx-spot-row:focus-visible {
+  outline: 2px solid #00b4ff;
+  outline-offset: 2px;
+}
+.dx-spot-call {
+  font-weight: 800;
+  color: #00e676;
+  text-transform: uppercase;
+}
+.dx-spot-freq {
+  color: #e0e0e0;
+  font-variant-numeric: tabular-nums;
+}
+.dx-spot-band {
+  font-weight: 700;
+}
+.dx-spot-spotter {
+  color: #8fa8c4;
+}
+.dx-spot-time {
+  color: #b0c4d8;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dx-spot-comment {
+  color: #9db9cc;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .dx-spot-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 10px;
+    padding: 10px;
+  }
+  .dx-spot-comment {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+}
