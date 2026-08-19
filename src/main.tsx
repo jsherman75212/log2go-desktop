@@ -129,9 +129,6 @@ import { renderAimText, getAimMessageClass } from './components/AimMessageRender
 import { DashboardTab } from './dashboard';
 
 // Desktop-only imports
-import { MatrixClock } from './application/matrixClock';
-import { useOfflineStatus, type OfflineStatus } from './application/useOfflineStatus';
-import { offlineDb } from './services/offlineDb';
 
 
 type AppTab = 'dashboard' | 'netlogger' | 'general' | 'contest' | 'logbook' | 'settings';
