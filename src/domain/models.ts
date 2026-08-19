@@ -31,6 +31,7 @@ export type StationProfileSnapshot = {
   defaultMode: string;
   defaultSignalReport: SignalReport;
   autoGps?: boolean;
+  locationOverride?: boolean;
   active: boolean;
 };
 

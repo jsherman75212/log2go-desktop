@@ -128,6 +128,12 @@ import { useKeyboardShortcuts, useStationHighlighter, parseSlashCodes, type High
 import { renderAimText, getAimMessageClass } from './components/AimMessageRenderer';
 import { DashboardTab } from './dashboard';
 
+// Desktop-only imports
+import { MatrixClock } from './application/matrixClock';
+import { useOfflineStatus, type OfflineStatus } from './application/useOfflineStatus';
+import { offlineDb } from './services/offlineDb';
+
+
 type AppTab = 'dashboard' | 'netlogger' | 'general' | 'contest' | 'logbook' | 'settings';
 
 const desktopPersistenceStores = createDesktopPersistenceStores();
@@ -272,7 +278,8 @@ function isProfileCompleteForLogging(profile: StationProfile | undefined): boole
   const hasCallsign = (profile.callsign?.trim().length ?? 0) > 0;
   const hasLocation = (profile.homeGrid?.trim().length ?? 0) > 0 || (profile.state?.trim().length ?? 0) > 0 || (profile.county?.trim().length ?? 0) > 0;
   const hasAutoGps = profile.autoGps ?? false;
-  return hasCallsign && (hasLocation || hasAutoGps);
+  const hasLocationOverride = profile.locationOverride ?? false;
+  return hasCallsign && (hasLocation || hasAutoGps || hasLocationOverride);
 }
 
 /** Return a descriptive list of missing required fields for a profile. */
@@ -282,7 +289,8 @@ function getMissingProfileFields(profile: StationProfile | undefined): string[] 
   if (!(profile.callsign?.trim().length ?? 0)) missing.push('Callsign');
   const hasLocation = (profile.homeGrid?.trim().length ?? 0) > 0 || (profile.state?.trim().length ?? 0) > 0 || (profile.county?.trim().length ?? 0) > 0;
   const hasAutoGps = profile.autoGps ?? false;
-  if (!hasLocation && !hasAutoGps) missing.push('Location (Grid, State/County, or enable Auto GPS)');
+  const hasLocationOverride = profile.locationOverride ?? false;
+  if (!hasLocation && !hasAutoGps && !hasLocationOverride) missing.push('Location (Grid, State/County, or enable Auto GPS)');
   return missing;
 }
 
@@ -405,6 +413,7 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
     return cleanup;
   }, []);
   const [loggingState, setLoggingState] = useState<LoggingFlowState>(() => createInitialLoggingFlowState());
+  const offlineStatus: OfflineStatus = useOfflineStatus(loggingState.backendBaseUrl, loggingState.accessToken || "");
   const [persistenceReady, setPersistenceReady] = useState(false);
   const [activeNets, setActiveNets] = useState<FlatActiveNet[]>([]);
   const [log2goNets, setLog2GoNets] = useState<FlatActiveNet[]>([]);
@@ -471,7 +480,6 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
 
   // ── NetLogger parity: preferences, highlighter, find, AIM ignore ────
   const { prefs, update: updatePrefs, reset: resetPrefs } = usePreferences();
-  const offlineStatus: OfflineStatus = useOfflineStatus(loggingState.backendBaseUrl, loggingState.accessToken ?? "");
   const [showPreferences, setShowPreferences] = useState(false);
   const [highlighterMode, setHighlighterMode] = useState<'manual' | 'automatic'>(
     () => prefs.manualHighlighterStartup ? 'manual' : 'automatic'
@@ -2696,7 +2704,7 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
                 const hasCallsign = (active.callsign?.trim().length ?? 0) > 0;
                 const hasLocation = (active.homeGrid?.trim().length ?? 0) > 0 || (active.state?.trim().length ?? 0) > 0 || (active.county?.trim().length ?? 0) > 0;
                 const hasAutoGps = active.autoGps ?? false;
-                if (!hasCallsign || (!hasLocation && !hasAutoGps)) {
+                if (!hasCallsign || (!hasLocation && !hasAutoGps && !(active.locationOverride ?? false))) {
                   setNetsStatus('Select a station profile with location info before logging contacts. Go to Settings to select or create one.');
                   setTab('settings');
                   return;
@@ -2730,10 +2738,20 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
             <button className="tb-login-btn" onClick={() => setAuthGateVisible(true)}>LOG IN</button>
           )}
         </div>
+          {!offlineStatus.isOnline && (
+            <span style={{ color: '#ff6b6b', marginRight: 8 }} title="Offline — contacts saved locally, will sync when reconnected">
+              ⚠ Offline ({offlineStatus.stats.pendingSync} pending)
+            </span>
+          )}
+          {offlineStatus.isOnline && offlineStatus.stats.pendingSync > 0 && (
+            <span style={{ color: '#ffa500', marginRight: 8 }} title="Syncing pending contacts">
+              ↻ Syncing {offlineStatus.stats.pendingSync} contact(s)…
+            </span>
+          )}
       </div>
 
       {tab === 'dashboard' ? (
-        <DashboardTab accessToken={loggingState.accessToken} backendBaseUrl={loggingState.backendBaseUrl} />
+        <DashboardTab accessToken={loggingState.accessToken} backendBaseUrl={loggingState.backendBaseUrl} accountProfile={accountProfile} stationGrid={loggingState.stationProfile.homeGrid} />
       ) : tab === 'netlogger' ? (
         <>
         {viewingHistory ? (
@@ -3862,18 +3880,6 @@ const [tab, setTab] = useState<AppTab>(() => readInitialTab());
       {tab !== 'dashboard' && (
       <footer className="bottom-bar">
         <span>{netsStatus}</span>
-        <span>
-          {!offlineStatus.isOnline && (
-            <span style={{ color: '#ff6b6b', marginRight: 8 }} title="Offline — contacts saved locally, will sync when reconnected">
-              ⚠ Offline ({offlineStatus.stats.pendingSync} pending)
-            </span>
-          )}
-          {offlineStatus.isOnline && offlineStatus.stats.pendingSync > 0 && (
-            <span style={{ color: '#ffa500', marginRight: 8 }} title="Syncing pending contacts">
-              ↻ Syncing {offlineStatus.stats.pendingSync} contact(s)…
-            </span>
-          )}
-        </span>
         <span>{loggingState.contacts.length} local contact(s) this session</span>
       </footer>
       )}
@@ -4410,6 +4416,7 @@ function ProfileEditForm({
   const [defaultMode, setDefaultMode] = useState(profile?.defaultMode ?? 'SSB');
   const [rigInfo, setRigInfo] = useState(profile?.rigInfo ?? '');
   const [autoGps, setAutoGps] = useState(profile?.autoGps ?? false);
+  const [locationOverride, setLocationOverride] = useState(profile?.locationOverride ?? false);
   const [gpsCapturing, setGpsCapturing] = useState(false);
   const [showGpsDialog, setShowGpsDialog] = useState(false);
   const [gpsDeviceAvailable, setGpsDeviceAvailable] = useState<boolean | null>(null);
@@ -4433,6 +4440,7 @@ function ProfileEditForm({
       defaultMode: defaultMode.trim() || undefined,
       rigInfo: rigInfo.trim() || undefined,
       autoGps,
+      locationOverride,
     });
   };
 
@@ -4497,6 +4505,26 @@ function ProfileEditForm({
     save();
   };
 
+  /**
+   * Forward-geocode city/state/country to coordinates and calculate grid square.
+   * Called when locationOverride is on and the user changes location fields.
+   */
+  const geocodeManualLocation = async () => {
+    if (!locationOverride) return;
+    const hasLocationFields = city.trim() || state.trim() || county.trim();
+    if (!hasLocationFields) return;
+    try {
+      const { geocodeLocation, calculateMaidenheadGrid } = await import('./utils/maidenhead');
+      const coords = await geocodeLocation({ city: city.trim(), state: state.trim(), county: county.trim(), country: undefined });
+      if (coords) {
+        const grid = calculateMaidenheadGrid(coords, 6);
+        setHomeGrid(grid);
+      }
+    } catch {
+      // Non-fatal — grid just won't auto-fill
+    }
+  };
+
   const captureGps = () => {
     if (!navigator.geolocation) {
       setGpsDeviceAvailable(false);
@@ -4545,9 +4573,22 @@ function ProfileEditForm({
         return;
       }
       setAutoGps(true);
+      // Turning on auto GPS disables manual location override
+      setLocationOverride(false);
     } else {
       // Turning off
       setAutoGps(false);
+    }
+  };
+
+  const toggleLocationOverride = () => {
+    if (!locationOverride) {
+      // Turning on location override — turn off auto GPS since manual location takes priority
+      setAutoGps(false);
+      setLocationOverride(true);
+    } else {
+      // Turning off — just disable override
+      setLocationOverride(false);
     }
   };
 
