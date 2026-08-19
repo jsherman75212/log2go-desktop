@@ -17,6 +17,9 @@ let manualUpdateCheck = false;
 
 const FEEDBACK_API_URL = 'https://api.log2goapp.net/api/feedback';
 
+// Public-facing support email. Override via SUPPORT_EMAIL env var for privacy.
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@ke5zqv.net';
+
 function getCrashLogPath(): string {
   return path.join(app.getPath('userData'), 'crash-logs.txt');
 }
@@ -65,7 +68,7 @@ function reportCrash(error: unknown, context: string): Promise<boolean> {
     const payload = JSON.stringify({
       category: 'Bug Report',
       message,
-      email: 'support@ke5zqv.net',
+      email: SUPPORT_EMAIL,
       app_version: appVersion,
       platform: 'Desktop (Electron)',
     });
@@ -105,7 +108,7 @@ function showCrashDialog(error: unknown, context: string): void {
     buttons: ['OK'],
     title: 'Unexpected Error',
     message: `An unexpected error occurred (${context}).`,
-    detail: `${errorMessage}\n\nA report has been sent to support@ke5zqv.net.`,
+    detail: `${errorMessage}\n\nA report has been sent to ${SUPPORT_EMAIL}.`,
   });
 }
 
@@ -116,7 +119,7 @@ function showFatalCrashDialog(error: unknown): void {
     buttons: ['Close Application'],
     title: 'Critical Error',
     message: 'Log2Go Desktop encountered a critical error and cannot continue.',
-    detail: `${errorMessage}\n\nA crash report has been sent to support@ke5zqv.net. Please restart the app.`,
+    detail: `${errorMessage}\n\nA crash report has been sent to ${SUPPORT_EMAIL}. Please restart the app.`,
   });
 }
 
@@ -246,7 +249,7 @@ async function showUpdateError(message: string, rawError: unknown): Promise<void
       buttons: ['OK'],
       title: reported ? 'Report Sent' : 'Report Failed',
       message: reported
-        ? 'The error has been reported to support@ke5zqv.net.'
+        ? `The error has been reported to ${SUPPORT_EMAIL}.`
         : 'Failed to send the report. Details were saved to crash-logs.txt.',
     });
   }

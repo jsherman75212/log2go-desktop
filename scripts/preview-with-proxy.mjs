@@ -101,8 +101,12 @@ const server = createServer(async (req, res) => {
 
 server.listen(port, host, () => {
   const local = `http://localhost:${port}/`;
-  const lan = `http://192.0.2.1:${port}/`;
+  // Public bind address is configurable via NETLOGGER_HOST so the repo never
+  // exposes a hardcoded LAN IP. Default to localhost for safe local preview.
+  const advertiseHost = process.env.NETLOGGER_HOST || 'localhost';
+  const advertisePort = Number(process.env.NETLOGGER_PORT || port);
+  const network = `http://${advertiseHost}:${advertisePort}/`;
   console.log(`Log2Go Desktop preview with NetLogger proxy ready`);
   console.log(`  ➜  Local:   ${local}`);
-  console.log(`  ➜  Network: ${lan}`);
+  console.log(`  ➜  Network: ${network}`);
 });

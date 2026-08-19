@@ -12,3 +12,24 @@ Log2Go-Desktop-win-x64/
 *.dat
 *.asar
 build-artifacts/
+# Agent/tooling directories
+.agents/
+.claude/
+.hermes/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*

@@ -4,17 +4,21 @@ import assert from 'node:assert/strict';
 const netloggerClient = require('./netloggerClient.ts');
 const client = netloggerClient.default ?? netloggerClient;
 
+// Test-only preview server port. Must match the preview server default
+// (scripts/preview-with-proxy.mjs) but is not a real production endpoint.
+const TEST_NETLOGGER_PORT = 54337;
+
 test('buildNetloggerApiUrl uses same-origin proxy for browser preview pages', () => {
   const url = client.buildNetloggerApiUrl('GetCheckins.php', {
     ServerName: 'NETLOGGER3',
     NetName: '3905 40m SSB Late Net',
   }, {
     protocol: 'http:',
-    origin: 'http://192.0.2.1:54337',
-    hostname: '192.0.2.1',
+    origin: `http://localhost:${TEST_NETLOGGER_PORT}`,
+    hostname: 'localhost',
   });
 
-  assert.equal(url.toString(), 'http://192.0.2.1:54337/netlogger-api/GetCheckins.php?ServerName=NETLOGGER3&NetName=3905+40m+SSB+Late+Net');
+  assert.equal(url.toString(), `http://localhost:${TEST_NETLOGGER_PORT}/netlogger-api/GetCheckins.php?ServerName=NETLOGGER3&NetName=3905+40m+SSB+Late+Net`);
 });
 
 test('buildNetloggerApiUrl uses direct NetLogger API outside same-origin browser preview', () => {

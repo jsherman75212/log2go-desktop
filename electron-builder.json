@@ -42,7 +42,7 @@
       }
     ],
     "category": "HamRadio",
-    "maintainer": "support@ke5zqv.net",
+    "maintainer": "Jody Sherman <jsherman75212@users.noreply.github.com>",
     "description": "Log2Go Desktop \u2014 Amateur radio logging with offline mode"
   },
   "npmRebuild": false,
@@ -52,7 +52,7 @@
       "provider": "github",
       "owner": "jsherman75212",
       "repo": "log2go-desktop",
-      "private": true,
+      "private": false,
       "releaseType": "release"
     }
   ]

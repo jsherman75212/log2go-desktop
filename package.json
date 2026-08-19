@@ -2,6 +2,7 @@
   "name": "log2go-desktop",
   "version": "1.0.3",
   "private": true,
+  "author": "Jody Sherman <jsherman75212@users.noreply.github.com>",
   "description": "Log2Go Desktop - NetLogger-style amateur radio logging client",
   "main": "dist-electron/main.js",
   "scripts": {

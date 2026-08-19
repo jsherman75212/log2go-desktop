@@ -9,7 +9,7 @@ test('desktop account session logs in and stores shared backend token/profile st
     ...createInitialLoggingFlowState(),
     backendBaseUrl: 'https://api.example.test',
     username: 'jody',
-    password: 'secret',
+    password: 'test-password-not-real',
   };
   const calls: string[] = [];
 
@@ -17,7 +17,7 @@ test('desktop account session logs in and stores shared backend token/profile st
     deviceId: 'desktop-device-1',
     async login(baseUrl, username, password, deviceId) {
       calls.push(`login:${baseUrl}:${username}:${password}:${deviceId}`);
-      return { access_token: 'token-1', user_id: 7, device_id: 'desktop-device-1' };
+      return { access_token: 'mock-test-token-not-real', user_id: 7, device_id: 'desktop-device-1' };
     },
     async getAccountProfile(baseUrl, token) {
       calls.push(`profile:${baseUrl}:${token}`);
@@ -26,10 +26,10 @@ test('desktop account session logs in and stores shared backend token/profile st
   });
 
   assert.deepEqual(calls, [
-    'login:https://api.example.test:jody:secret:desktop-device-1',
-    'profile:https://api.example.test:token-1',
+    'login:https://api.example.test:jody:test-password-not-real:desktop-device-1',
+    'profile:https://api.example.test:mock-test-token-not-real',
   ]);
-  assert.equal(result.state.accessToken, 'token-1');
+  assert.equal(result.state.accessToken, 'mock-test-token-not-real');
   assert.equal(result.accountProfile?.callsign, 'KE5ZQV');
   assert.equal(result.message, 'Logged in as KE5ZQV.');
 });
@@ -41,7 +41,7 @@ test('desktop account session rejects missing login settings before calling back
   const result = await logInDesktopAccount(state, {
     async login() {
       loginCalled = true;
-      return { access_token: 'token-1' };
+      return { access_token: 'mock-test-token-not-real' };
     },
     async getAccountProfile() {
       throw new Error('should not fetch profile without credentials');
@@ -58,8 +58,8 @@ test('desktop account session logs out by clearing token and password while pres
     ...createInitialLoggingFlowState(),
     backendBaseUrl: 'https://api.example.test',
     username: 'jody',
-    password: 'secret',
-    accessToken: 'token-1',
+    password: 'test-password-not-real',
+    accessToken: 'mock-test-token-not-real',
   };
 
   const result = logOutDesktopAccount(state);
