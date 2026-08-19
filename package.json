@@ -1,6 +1,6 @@
 {
   "name": "log2go-desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Log2Go Desktop - NetLogger-style amateur radio logging client",
   "main": "dist-electron/main.js",
