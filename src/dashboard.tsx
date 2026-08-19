@@ -108,7 +108,7 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
   const [solarWl, setSolarWl] = useState<string>('0193');
   const [solarCycle, setSolarCycle] = useState(false);
   const [solarRefreshKey, setSolarRefreshKey] = useState(Date.now());
-  const solarImageUrl = solarWl ? '/solar-image/' + solarWl + '?t=' + solarRefreshKey : '';
+  const solarImageUrl = solarWl ? 'https://log2goapp.net/solar-image/' + solarWl + '?t=' + solarRefreshKey : '';
   const [solar, setSolar] = useState<SolarData>({
     sfi: null, sfi_90d: null, sn: null, a_index: null, k_index: null,
     r_scale: null, s_scale: null, g_scale: null,
@@ -321,7 +321,7 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
       const stationPts = [{ lat: STATION.lat, lng: STATION.lng, label: stationLabel, color: '#00b4ff', size: 0.6 }];
 
       globe = G()
-        .globeImageUrl('/dashboard/img/globe/globe_level0_8192x4096.jpg')
+        .globeImageUrl('https://log2goapp.net/dashboard/img/globe/globe_level0_8192x4096.jpg')
         .bumpImageUrl('/dashboard/img/earth-topology.png')
         .showAtmosphere(true)
         .atmosphereColor('#00b4ff')
@@ -386,7 +386,7 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
     // Load globe.gl script if not already loaded
     if (!(window as any).Globe) {
       const script = document.createElement('script');
-      script.src = '/dashboard/js/globe.gl.min.js';
+      script.src = 'https://log2goapp.net/dashboard/js/globe.gl.min.js';
       script.onload = () => initGlobe();
       document.head.appendChild(script);
     } else {
@@ -408,7 +408,7 @@ export function DashboardTab({ accessToken, backendBaseUrl, accountProfile, stat
     const g = globeObjRef.current;
     if (!g) return;
     if (globeView === 'day') {
-      g.globeImageUrl('/dashboard/img/globe/globe_level0_8192x4096.jpg');
+      g.globeImageUrl('https://log2goapp.net/dashboard/img/globe/globe_level0_8192x4096.jpg');
       g.bumpImageUrl('/dashboard/img/earth-topology.png');
       g.showAtmosphere(true);
     } else {
