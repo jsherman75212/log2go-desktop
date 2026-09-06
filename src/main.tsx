@@ -5604,6 +5604,7 @@ function LogbookTab({
     try {
       const report = await uploadToServices(loggingState.backendBaseUrl!, loggingState.accessToken!);
       const parts: string[] = [];
+      if (report.total_imported > 0) parts.push('Imported ' + report.total_imported);
       if (report.total_uploaded > 0) parts.push('Uploaded ' + report.total_uploaded);
       if (report.total_confirmed > 0) parts.push('Confirmed ' + report.total_confirmed);
       if (report.errors.length > 0) parts.push('Errors: ' + report.errors.join(', '));

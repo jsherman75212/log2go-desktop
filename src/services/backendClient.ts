@@ -284,9 +284,11 @@ export async function getDXSpots(
 
 export type ServiceSyncReport = {
   summary: string;
+  total_imported: number;
   total_uploaded: number;
   total_confirmed: number;
   errors: string[];
+  imports: { service: string; imported: number; skipped: number; updated: number; warning: string | null }[];
   uploads: { service: string; uploaded: number; skipped: number; errors: string[] }[];
   confirmations: { service: string; confirmed: number; checked: number; errors: string[] }[];
 };
