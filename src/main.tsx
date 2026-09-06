@@ -115,7 +115,6 @@ import type {
 import { getActiveProfile } from './domain/stationProfiles';
 import type { Contact, StationProfile, StationProfileCollection, MobilePortableStatus } from './domain/models';
 import { AuthGate } from './application/authGate';
-import { MatrixClock } from './application/matrixClock';
 import { useOfflineStatus, type OfflineStatus } from './application/useOfflineStatus';
 import { offlineDb, type DesktopBridge } from './services/offlineDb';
 import { setBackendSettings } from './application/loggingFlow';
@@ -5552,6 +5551,7 @@ function LogbookTab({
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [showSubModal, setShowSubModal] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [sortKey, setSortKey] = useState<'qso_date' | 'call' | 'mode' | 'band'>('qso_date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const isLoggedIn = Boolean(loggingState.accessToken);
@@ -5815,6 +5815,15 @@ function LogbookTab({
           </div>
         </div>
       )}
+      <FeedbackModal
+        isOpen={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        backendBaseUrl={loggingState.backendBaseUrl}
+        accessToken={loggingState.accessToken ?? undefined}
+        defaultEmail={loggingState.username.includes('@') ? loggingState.username : ''}
+        appVersion={APP_VERSION}
+        platform="Desktop"
+      />
     </section>
   );
 }
