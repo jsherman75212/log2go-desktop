@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   fetchActiveNets,
@@ -5532,6 +5532,7 @@ type BackendQso = {
   lotw_confirmed?: boolean;
   eqsl_confirmed?: boolean;
   qrz_confirmed?: boolean;
+  [key: string]: unknown;
 };
 
 function LogbookTab({
@@ -5653,6 +5654,21 @@ function LogbookTab({
     }
   };
 
+  const [expandedQsoId, setExpandedQsoId] = useState<string | number | null>(null);
+  const qsoRowKey = (qso: BackendQso) => qso.id ?? `${qso.call}-${qso.qso_date}-${qso.time_on}`;
+  const expandable = (qso: BackendQso): Array<[string, string]> => {
+    const fields: Array<[string, string]> = [];
+    const push = (label: string, value?: string | null) => {
+      if (value && String(value).trim()) fields.push([label, String(value).trim()]);
+    };
+    push('Name', (qso.name as string | undefined) ?? (qso.operator_name as string | undefined) ?? qso.operator);
+    push('QTH', (qso.qth as string | undefined) ?? (qso.location as string | undefined));
+    push('County', qso.county);
+    push('Notes', (qso.notes as string | undefined) ?? (qso.remarks as string | undefined));
+    push('Net', qso.netlogger_net as string | undefined);
+    return fields;
+  };
+
   const formatDate = (date?: string) => {
     if (!date) return '—';
     // QSO_DATE is YYYYMMDD
@@ -5721,8 +5737,18 @@ function LogbookTab({
               </tr>
             </thead>
             <tbody>
-              {sortedQsos.map((qso) => (
-                <tr key={qso.id ?? `${qso.call}-${qso.qso_date}-${qso.time_on}`}>
+              {sortedQsos.map((qso) => {
+                const rowKey = qsoRowKey(qso);
+                const isExpanded = expandedQsoId !== null && expandedQsoId === rowKey;
+                const extra = expandable(qso);
+                return (
+                  <Fragment key={String(rowKey)}>
+                <tr
+                  className={isExpanded ? 'logbook-row expanded' : 'logbook-row'}
+                  onClick={() => setExpandedQsoId(isExpanded ? null : rowKey)}
+                  style={{ cursor: 'pointer' }}
+                  title="Click for full QSO details"
+                >
                   <td className="callsign">{qso.call || '—'}</td>
                   <td>{formatDate(qso.qso_date)}</td>
                   <td>{qso.time_on || '—'}</td>
@@ -5739,7 +5765,26 @@ function LogbookTab({
                   <td className={`conf-col ${qso.eqsl_confirmed ? 'confirmed' : qso.eqsl_uploaded ? 'uploaded' : ''}`}>{qso.eqsl_confirmed ? '✅' : qso.eqsl_uploaded ? '↑' : '—'}</td>
                   <td className={`conf-col ${qso.qrz_confirmed ? 'confirmed' : qso.qrz_uploaded ? 'uploaded' : ''}`}>{qso.qrz_confirmed ? '✅' : qso.qrz_uploaded ? '↑' : '—'}</td>
                 </tr>
-              ))}
+                {isExpanded && (
+                  <tr className="logbook-detail-row">
+                    <td colSpan={13}>
+                      {extra.length === 0 ? (
+                        <span className="logbook-detail-empty">All details shown in the row above.</span>
+                      ) : (
+                        <div className="logbook-detail">
+                          {extra.map(([label, value]) => (
+                            <div key={label} className="logbook-detail-field">
+                              <b>{label}:</b> {value}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         )}
